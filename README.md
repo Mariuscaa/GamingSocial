@@ -3,6 +3,8 @@ GamingSocial er et prosjekt utviklet av gruppe 5 for .NET-emnet ved Høgskolen I
 
 Prosjektet har som mål å fungere som et sted hvor gamere kan møtes, diskutere, utforske og planlegge spill og sessions sammen.
 
+Prosjektet hadde som krav å bruke mikrotjeneste arkitektur med REST for kommunikasjon mellom tjenester.
+
 # Starthjelp 
 1.   __Første start av programmet__
 
