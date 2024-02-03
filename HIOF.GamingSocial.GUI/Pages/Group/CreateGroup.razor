@@ -1,0 +1,127 @@
+﻿@page "/create-group"
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Services
+@inject UserService UserService
+@inject GroupService GroupService
+@inject NavigationManager NavigationManager
+@inject ILogger<CreateGroup> Logger
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<h1>Create a new group</h1>
+
+<div class="container">
+
+
+    <EditForm Model="@_postGroup" OnValidSubmit="OnSubmit">
+        <DataAnnotationsValidator />
+        <div class="form-group">
+            <label>Group name:</label>
+            <InputText class="form-control" @bind-Value="_postGroup.GroupName" />
+            <ValidationMessage For="@(() => _postGroup.GroupName)" />
+        </div>
+        <div class="form-group">
+            <label>Description:</label>
+            <InputText class="form-control" @bind-Value="_postGroup.Description" />
+            <ValidationMessage For="@(() => _postGroup.Description)" />
+        </div>
+        <div class="form-group">
+            <label>Group picture URL:</label>
+            <InputText class="form-control" @bind-Value="_postGroup.PhotoUrl" />
+        </div>
+        <div class="form-group">
+            <label>Should the group be hidden?:</label>
+            <InputCheckbox class="form-check-input" @bind-Value="_postGroup.IsHidden" />
+        </div>
+        <div class="form-group">
+            <label>Should the group be private?:</label>
+            <InputCheckbox class="form-check-input" @bind-Value="_postGroup.IsPrivate" />
+        </div>
+        <button type="submit" class="button">Create Group</button>
+    </EditForm>
+
+    @if (_showSuccessMessage)
+    {
+        <div class="alert alert-success mt-3" role="alert">
+            Group has been created successfully!
+            <button class="button" @onclick="@(() => NavigationManager.NavigateTo($"group/{_newGroup.GroupId}"))">Go to group</button>
+        </div>
+        _showSuccessMessage = false;
+    }
+
+    @if (_showErrorMessage)
+    {
+        <div class="alert alert-danger mt-3" role="alert">
+            Failed to create the group for the following reason:
+            @_result.Errors[0]
+        </div>
+    }
+</div>
+
+
+@code {
+    private Guid _loggedInProfileGuid;
+    private bool _showSuccessMessage = false;
+    private bool _showErrorMessage = false;
+    private V3PostGroup _postGroup = new();
+    private V3Group _newGroup = new();
+    private V3Result<V3Group> _result;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var LoggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            if (Guid.TryParse(LoggedInUser, out _loggedInProfileGuid))
+            {
+
+            }
+
+            else
+            {
+                NavigationManager.NavigateTo("/logout");
+                Logger.LogError("Invalid GUID.");
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnSubmit()
+    {
+        _showSuccessMessage = false;
+        _showErrorMessage = false;
+
+        _result = await GroupService.CreateGroupAsync(_postGroup);
+
+        if (!_result.HasErrors)
+        {
+            _newGroup = _result.Value;
+            _showErrorMessage = false;
+            _showSuccessMessage = true;
+            var postGroupMembership = new V3PostGroupMembership()
+                {
+                    GroupId = _result.Value.GroupId,
+                    Member = new V3Member()
+                    {
+                        MemberType = "Owner",
+                        ProfileGuid = _loggedInProfileGuid
+                    }
+                };
+            var addOwnerResult = await GroupService.AddUserToGroupAsync(postGroupMembership);
+            if (addOwnerResult.HasErrors)
+            {
+                Logger.LogError("Failed to add user to group for the following reason: " + addOwnerResult.Errors[0]);
+            }
+            else
+            {
+                
+            }
+        }
+        else
+        {
+            Logger.LogWarning("Failed to create group for the following reason: " + _result.Errors[0]);
+            _showSuccessMessage = false;
+            _showErrorMessage = true;
+        }
+    }
+}

@@ -1,0 +1,210 @@
+﻿@page "/my-groups"
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Services
+@inject UserService UserService
+@inject GroupService GroupService
+@inject NavigationManager NavigationManager
+@inject ILogger<MyGroups> Logger
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+
+<div class="header-search">
+        <h2>Search for groups</h2>
+   
+    <form @onsubmit="PerformSearchForGroups">
+        <div class="form-group">
+            <input type="text" class="form-control" @bind="_searchQuery" placeholder="Enter your search query" />
+            <button type="submit" class="button">Search</button>
+        </div>
+    </form>
+
+    @if (_noGroupsInSearch)
+    {
+        <div class="alert alert-danger mt-3" role="alert">
+            No games found with search: @_searchQuery
+        </div>
+    }
+    else
+    {
+        <div class="search_result_container">
+            @foreach (var group in _groupList)
+            {
+                <div class="individual_search_result">
+                    <b>@group.GroupName</b>
+                    <button class="button" @onclick="@(() => NavigationManager.NavigateTo($"group/{group.GroupId}"))">More Details</button>
+                </div>
+            }
+        </div>
+    }
+</div>
+<div class="container">
+
+    <div class="header-container">
+        <h2>My Groups</h2>
+    </div>
+
+    <div class="header-container">
+        <button class="button" @onclick="@(() => NavigationManager.NavigateTo("create-group"))">Create new group</button>
+    </div>
+
+    @if (_myGroups == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <div class="group_card_wrapper">
+        <div class="group_card">
+            @foreach (var group in _myGroups)
+            {
+                <div class="individual_group">
+                    @if (!string.IsNullOrEmpty(group.PhotoUrl))
+                    {
+                        <img src="@group.PhotoUrl" alt="@group.GroupName" class="group_photo" />
+                    }
+                    else
+                    {
+                        <img src="/Images/group.png" alt="Default Group Picture" class="group_photo" />
+                    }
+
+                    <div class="group_text_wrapper">
+                        <h5>Group Name:</h5>
+                        <p>@group.GroupName</p>
+                        <h5>Description:</h5>
+                        <p>@ShortenDescription(group.Description, group.GroupId.ToString())</p>
+                        <button class="button" @onclick="@(() => NavigationManager.NavigateTo($"group/{group.GroupId}"))">View Group</button>
+                    </div>
+                </div>
+            }
+        </div>
+        </div>
+    }
+</div>
+
+
+
+
+
+@code {
+    private string _searchQuery;
+
+    private bool _noGroupsInSearch;
+
+    private bool _noUserHasNoGroups;
+
+    private List<V3Group> _groupList = new List<V3Group>();
+
+    private List<V3Group> _myGroups = new();
+
+
+
+
+    private string GetPhotoUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return "/images/profile.png";
+        }
+        return url;
+    }
+
+
+
+    private MarkupString ShortenDescription(string description, string groupId)
+    {
+        const int maxLength = 100;
+        string shortenedDescription = description.Length <= maxLength
+            ? description
+            : description.Substring(0, maxLength) + "...";
+
+        string seeMoreLink = $"<a href='group/{groupId}'>More details</a>";
+        string result = $"{shortenedDescription} {seeMoreLink}";
+
+        return new MarkupString(result);
+    }
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var LoggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            if (Guid.TryParse(LoggedInUser, out Guid loggedInProfileGuid))
+            {
+                var getGroupsResult = await GroupService.GetGroupsForProfileAsync(loggedInProfileGuid);
+
+                if (getGroupsResult.Errors.Count != 0)
+                {
+                    if (getGroupsResult.Errors.Contains($"There are no groups for the profile ID {loggedInProfileGuid} in the database."))
+                    {
+                        _noUserHasNoGroups = true;
+                    }
+
+                    else
+                    {
+                        Logger.LogWarning("Error during search: " + string.Join(", ", getGroupsResult.Errors));
+                    }
+                }
+                else
+                {
+                    _noUserHasNoGroups = false;
+
+                    foreach (var groupId in getGroupsResult.Value.GroupIds)
+                    {
+                        var getGroupResult = await GroupService.GetSingleGroupAsync(groupId);
+                        if (getGroupsResult.Errors.Count != 0)
+                        {
+                            if (getGroupResult.Errors.Contains($"No group found with the search `{groupId}`."))
+                            {
+                                // Group does not exist. Should delete from GroupMembership in a future version.
+                                Logger.LogWarning($"No group found with search {groupId}. Group exists in GroupMembership, but not in Group.");
+                            }
+
+                            else
+                            {
+                                Logger.LogWarning("Error during search: " + string.Join(", ", getGroupResult.Errors));
+                            }
+                        }
+                        else
+                        {
+                            _myGroups.Add(getGroupResult.Value);
+                        }
+                    }
+                }
+            }
+
+            else
+            {
+                Logger.LogWarning($"Could not parse {LoggedInUser} to a Guid.");
+                NavigationManager.NavigateTo("/logout");
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async void PerformSearchForGroups()
+    {
+        _groupList.Clear();
+        var searchResult = await GroupService.GetGroupsAsync(_searchQuery, false);
+
+        if (searchResult.Errors.Count != 0)
+        {
+            if (searchResult.Errors.Contains($"No groups found with the search `{_searchQuery}`"))
+            {
+                _noGroupsInSearch = true;
+                Logger.LogWarning($"No groups found with search {_searchQuery}");
+            }
+
+            else
+            {
+                Logger.LogWarning("Error during search: " + string.Join(", ", searchResult.Errors));
+            }
+        }
+        else
+        {
+            _noGroupsInSearch = false;
+            _groupList = searchResult.Value.ToList();
+        }
+        StateHasChanged();
+    }
+}

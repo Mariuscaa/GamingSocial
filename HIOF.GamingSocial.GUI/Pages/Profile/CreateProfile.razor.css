@@ -1,0 +1,93 @@
+﻿body {
+}
+
+.profile-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    height: 90vh;
+
+}
+
+.profile-box {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    width: 30rem;
+    padding: 2rem;
+    background-color: white;
+    border: 0.1rem solid #ccc;
+    border-radius: 2rem;
+    box-shadow: 0rem 0rem 0.6rem rgba(0, 0, 0, 0.1);
+}
+
+.input-control {
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    border: 0.1rem solid #ccc;
+    width: 100%;
+    box-sizing: border-box;
+
+}
+
+
+
+.container {
+    margin: 0;
+    padding: 2rem;
+}
+
+.header-container {
+    text-align: center;
+}
+
+h1 {
+
+    font-weight: bold;
+    margin: 2rem 0 5rem 0;
+}
+
+.button {
+    background-color: #2b3e2a;
+    border-radius: 1rem 1rem;
+    border-color: black;
+    color: white;
+    text-align: center;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    font-weight: bold;
+    margin-top: 2rem;
+}
+
+.button:hover {
+    background-color: #1a2617;
+    filter: brightness(90%);
+    text-decoration: underline White;
+}
+
+.button:active {
+    color: lightgrey;
+}
+
+.profile-content {  
+    display: flex;
+    justify-content: center;
+    align-items:center;
+   
+}
+
+
+
+.form-group {
+    margin-bottom: 1rem;
+    display: flex;
+    align-items:center;
+    flex-wrap:wrap;
+    justify-content: space-between;
+}
+    
+

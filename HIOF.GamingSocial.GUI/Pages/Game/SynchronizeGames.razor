@@ -1,0 +1,96 @@
+﻿@page "/synchronize-games"
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Model.GameInformation
+@using HIOF.GamingSocial.GUI.Services
+@using System.ComponentModel.DataAnnotations;
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@inject GameService GameService
+@inject ILogger<SynchronizeGames> Logger
+@inject IToastService ToastService
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<div class="container">
+    <EditForm Model="@_model" OnValidSubmit="Submit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="header-container">
+            <h1>Add games from steam profile</h1>
+        </div>
+
+        <div class="input-container">
+            <div class="row">
+                <InputText @bind-Value="_model.SteamID" class="form-control" placeholder="Steam ID" />
+                <button type="submit" class="button">Submit</button>
+            </div>
+        </div>
+
+        @if (_steamGames is not null && _steamGames.Count > 0)
+        {
+            <p>Added <strong>@_steamGames.Count </strong> new games to your profile.</p>
+            <p>Check them out in your <a href="@($"mygames")">personal game page.</a></p>
+        }
+        else if (_isLoading)
+        {
+            <div class="loading-container">
+                <p><em>Loading...</em></p>
+            </div>
+        }
+    </EditForm>
+</div>
+
+@code {
+    private SearchModel _model = new();
+    private List<GameRatingWithName> _steamGames = new();
+    private Guid _loggedInProfileGuid;
+    private bool _isLoading;
+
+    public class SearchModel
+    {
+        [Required(ErrorMessage = "Steam ID is required.")]
+        public string? SteamID { get; set; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+
+            var LoggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            if (Guid.TryParse(LoggedInUser, out _loggedInProfileGuid))
+            {
+            }
+            else
+            {
+                Logger.LogWarning($"Failed to parse guid {LoggedInUser}");
+                NavigationManager.NavigateTo($"logout");
+            }
+        }
+    }
+
+    private async Task Submit()
+    {
+        _isLoading = true;
+        _steamGames.Clear();
+
+        var steamGamesResult = await GameService.PostSteamGamesForProfileAsync(_loggedInProfileGuid, _model.SteamID);
+        if (steamGamesResult.Errors.Count != 0)
+        {
+            ToastService.ShowError("Failed to synchronize games. Might be because profile is private or games are hidden.");
+
+        }
+        else
+        {
+            if (steamGamesResult.Value.Count > 0)
+            {
+                _steamGames = steamGamesResult.Value;
+            }
+            else{
+            ToastService.ShowInfo("No new games to add!");
+            }
+        }
+        _isLoading = false;
+        _model.SteamID = null;
+    }
+}

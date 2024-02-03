@@ -1,0 +1,174 @@
+﻿@page "/gametimeplan/{gameTimePlanId}"
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Model.ProfileInformation;
+@using HIOF.GamingSocial.GUI.Services
+@inject GroupService GroupService
+@inject UserService UserService
+@inject GameService GameService
+@inject GameTimePlannerService GameTimePlannerService
+@inject NavigationManager NavigationManager
+@inject ILogger<GameTimePlan> Logger
+@inject IToastService ToastService
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+
+<h1>GameTimePlan</h1>
+
+<div class="container">
+    
+
+    @if (_gameTimePlan == null)
+    {
+        <p><em>@_pageStatus</em></p>
+    }
+    else
+    {
+        @if (_myGroupMembership.Members.Count == 0)
+        {
+            <h2>Access denied. You are not a member of the group which created this GameTimePlan.</h2>
+        }
+        else
+        {
+            <div class="card-body">
+                <h2 class="card-title">@_gameTimePlan.Name</h2>
+
+                <h6 class="card-subtitle ">
+                    <strong>Game:</strong> <a href="@($"game/{_game.Id}")" title="Go to the game page">@_game.GameTitle</a> |
+                    <strong>Group: </strong><a href="@($"group/{_group.GroupId}")" title="Go to the group page">@_group.GroupName</a>
+                </h6>
+
+                <p class="card-text">@_gameTimePlan.Description</p>
+
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item"> <strong>Start:</strong> @_gameTimePlan.StartTime.Date.ToShortDateString(), @_gameTimePlan.StartTime.TimeOfDay.ToString(@"hh\:mm")</li>
+                    <li class="list-group-item"> <strong>End:</strong> @_gameTimePlan.EndTime.Date.ToShortDateString(), @_gameTimePlan.EndTime.TimeOfDay.ToString(@"hh\:mm")</li>
+                </ul>
+
+                @if (_myGroupMembership.Members[0].MemberType == "Owner" || _myGroupMembership.Members[0].MemberType == "Admin")
+                {
+                    <button class="button" @onclick=DeleteGameTimePlan>Delete GameTimePlan</button>
+                }
+            </div>
+        }
+    }
+</div>
+
+
+ 
+@code {
+    [Parameter]
+    public string GameTimePlanId { get; set; }
+    private int _gameTimePlanIdAsInt;
+    private string _pageStatus { get; set; } = "Loading...";
+    private Guid _loggedInProfileGuid;
+    private V3VideoGameInformation _game = new();
+    private V3Group _group = new();
+    private V1GameTimePlan? _gameTimePlan = null;
+    private V3GroupMemberships _myGroupMembership = new()
+        {
+            Members = new List<V3Member>()
+        };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await PageSetup();
+            await IdentitySetup();
+            StateHasChanged();
+        }
+    }
+
+    private async Task PageSetup()
+    {
+        int.TryParse(GameTimePlanId, out _gameTimePlanIdAsInt);
+        if (_gameTimePlanIdAsInt == 0)
+        {
+            _pageStatus = $"{GameTimePlanId} is not a valid GroupId.";
+            Logger.LogWarning($"{GameTimePlanId} is not a valid GroupId.");
+        }
+
+        else
+        {
+            var gameTimePlanResult = await GameTimePlannerService.GetSingleGameTimePlanAsync(_gameTimePlanIdAsInt);
+            if (gameTimePlanResult.Errors.Count != 0)
+            {
+                _pageStatus = "Error getting group: " + string.Join(", ", gameTimePlanResult.Errors);
+                Logger.LogWarning("Error getting group: " + string.Join(", ", gameTimePlanResult.Errors));
+            }
+            else
+            {
+                _gameTimePlan = gameTimePlanResult.Value;
+                await GetGame();
+                await GetGroup();
+            }
+        }
+    }
+
+    private async Task GetGame()
+    {
+        var gameResult = await GameService.GetSingleGameAsync(_gameTimePlan.GameId);
+        if (gameResult.Errors.Count != 0)
+        {
+            _pageStatus = "Error getting game: " + string.Join(", ", gameResult.Errors);
+            Logger.LogWarning("Error getting game: " + string.Join(", ", gameResult.Errors));
+        }
+        else
+        {
+            _game = gameResult.Value;
+        }
+    }
+
+    private async Task GetGroup()
+    {
+        var groupResult = await GroupService.GetSingleGroupAsync(_gameTimePlan.GroupId);
+        if (groupResult.Errors.Count != 0)
+        {
+            _pageStatus = "Error getting group: " + string.Join(", ", groupResult.Errors);
+            Logger.LogWarning("Error getting group: " + string.Join(", ", groupResult.Errors));
+        }
+        else
+        {
+            _group = groupResult.Value;
+        }
+    }
+
+    private async Task DeleteGameTimePlan()
+    {
+        var deleteResult = await GameTimePlannerService.DeleteGameTimePlanAsync(_gameTimePlan.GameTimePlanId);
+        if (deleteResult.Errors.Count != 0)
+        {
+            ToastService.ShowError("Failed to delete GameTimePlan. Refresh and try again.");
+            Logger.LogError("Error deleting GameTimePlan: " + string.Join(", ", deleteResult.Errors));
+        }
+        else
+        {
+            ToastService.ShowSuccess("GameTimePlan deleted. Redirecting to GameTimePlanner page..");
+            await Task.Delay(2000);
+            NavigationManager.NavigateTo("/gametimeplanner");
+        }
+    }
+    private async Task IdentitySetup()
+    {
+        var LoggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+        if (Guid.TryParse(LoggedInUser, out _loggedInProfileGuid))
+        {
+            var groupMembershipResult = await GroupService.GetGroupMembership(_loggedInProfileGuid, _group.GroupId);
+            if (groupMembershipResult.Errors.Count != 0)
+            {
+                _pageStatus = "Error getting group membership status: " + string.Join(", ", groupMembershipResult.Errors);
+                Logger.LogWarning("Error getting group membership status: " + string.Join(", ", groupMembershipResult.Errors));
+                return;
+            }
+            else
+            {
+                _myGroupMembership = groupMembershipResult.Value;
+            }
+        }
+        else
+        {
+            Logger.LogError($"Invalid GUID: {_loggedInProfileGuid}.");
+            NavigationManager.NavigateTo("/logout");
+        }
+    }
+}

@@ -1,0 +1,80 @@
+﻿@page "/mygames"
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Model.GameInformation
+@using HIOF.GamingSocial.GUI.Services
+@inject GameService GameService
+@inject NavigationManager NavigationManager
+@inject ILogger<MyGames> Logger
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<div class="container">
+    <div class="header-container">
+        <h1>My Games</h1>
+    </div>
+
+    <div class="button-container">
+        <button class="button" @onclick="@(() => NavigationManager.NavigateTo("/games-search"))">Search for games</button>
+        <button class="button" @onclick="@(() => NavigationManager.NavigateTo("/synchronize-games"))">Synchronize your games with your Steam account</button>
+
+    </div>
+
+    @if (_myGames == null)
+    {
+        <div class="loading-container">
+            <p><em>Loading...</em></p>
+        </div>
+    }
+    else if (_myGames.Count == 0)
+    {
+        <div class="no-games-container">
+            <p>My games list is empty!</p>
+        </div>
+    }
+
+    else
+    {
+        <div class="game-table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Game Title</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var game in _myGames)
+                    {
+                        <tr>
+                            <td>
+                                <a href="@($"game/{game.GameId}")">@game.GameTitle</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<GameRatingWithName> _myGames;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var LoggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            if (Guid.TryParse(LoggedInUser, out Guid loggedInProfileGuid))
+            {
+                _myGames = await GameService.GetGamesForProfileAsync(loggedInProfileGuid);
+            }
+
+            else
+            {
+                Logger.LogWarning($"Could not parse {LoggedInUser} to a Guid.");
+                NavigationManager.NavigateTo("/login");
+            }
+
+            StateHasChanged();
+        }
+    }
+}

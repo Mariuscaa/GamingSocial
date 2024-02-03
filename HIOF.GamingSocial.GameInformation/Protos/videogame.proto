@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+import "Protos/shared_messages.proto";
+
+option csharp_namespace = "HIOF.GamingSocial.GameInformation.Protos";
+
+package videogame;
+
+message ProtoVideoGameInformation {
+  int32 id = 1;
+  string game_title = 2;
+  int32 steam_app_id = 3;
+  string giantbomb_guid = 4;
+  string game_description = 5;
+}
+
+message ProtoVideoGameInformationList {
+  repeated ProtoVideoGameInformation videoGameInformation = 1;
+}
+
+service VideoGameService {
+  rpc UpdateGameDatabase(sharedprotos.EmptyRequest) returns (sharedprotos.ProtoResult);
+}

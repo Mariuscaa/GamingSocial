@@ -1,0 +1,74 @@
+﻿@page "/friends"
+
+@using HIOF.GamingSocial.GUI.Model.ProfileInformation
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Services
+@inject UserService UserService
+@inject FriendService FriendService
+@inject NavigationManager NavigationManager
+@inject ILogger<Friends> Logger
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<div class="container">
+    <div class="header-container">
+        <h3>Friends</h3>
+    </div>
+    <div class="text-center">
+        <button class="button" @onclick="@(() => NavigationManager.NavigateTo("find-friends"))">Find more friends!</button>
+    </div>
+    <div class="friends-list">
+        @foreach (var friend in _friendList)
+        {
+            <div class="friend-item">
+                <div class="friend-image">
+                    @if (!string.IsNullOrEmpty(friend?.PhotoUrl))
+                    {
+                        <img src="@friend.PhotoUrl" alt="Friend's Picture" class="img-fluid profile-picture" />
+                    }
+                    else
+                    {
+                        <img src="/Images/profile.png" alt="Backup Profile Picture" class="img-fluid profile-picture" />
+                    }
+                </div>
+                <div class="friend-name">
+                    <a href="@($"profile/{friend.ProfileGuid}")">@friend.UserName</a>
+                </div>
+            </div>
+            <hr class="separator" />
+        }
+    </div>
+</div>
+
+
+@code {
+    private List<V3Profile> _friendList = new List<V3Profile>();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            string loggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            string value = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+
+            if (Guid.TryParse(loggedInUser, out Guid loggedInProfileGuid))
+            {
+                var friendsguids = await FriendService.CheckFriendsAsync(loggedInProfileGuid);
+                if (!friendsguids.HasErrors)
+                {
+                    foreach (Guid friendGuid in friendsguids.Value)
+                    {
+                        var friend = await UserService.CheckUserAsync(friendGuid);
+                        _friendList.Add(friend.Value);
+                    }
+                }
+            }
+            else
+            {
+                Logger.LogError($"Invalid GUID: {loggedInProfileGuid}.");
+                NavigationManager.NavigateTo("/logout");
+            }
+
+            StateHasChanged();
+        }
+    }
+}

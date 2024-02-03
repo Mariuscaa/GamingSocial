@@ -1,0 +1,212 @@
+﻿@page "/mypage"
+@using HIOF.GamingSocial.GUI.Model.ProfileInformation
+@using HIOF.GamingSocial.GUI.Model
+@inject HIOF.GamingSocial.GUI.Services.UserService UserService
+@inject NavigationManager NavigationManager
+@inject ILogger<Personal_page> Logger
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+
+<h3>Personal page</h3>
+
+<div class="container">
+
+    <button @onclick="ToggleEditMode" class="button mb-3">
+        @(isEditMode ? "Cancel edit" : "Edit profile")
+    </button>
+
+    <button class="button mb-3" onclick="@(() => NavigationManager.NavigateTo($"/profile/{_loggedInProfileGuid}"))">Public profile</button>
+
+    <div class="header-container">
+
+        @if (!isEditMode)
+        {
+            <div class="profile-content">
+                <div class="text-content">
+                    <p class="mb-2"><strong>UserName:</strong> @personal?.UserName</p>
+                    <p class="mb-2"><strong>Name:</strong> @personal?.Name</p>
+                    <p class="mb-2"><strong>Bio:</strong> @personal?.Bio</p>
+                    <p class="mb-2"><strong>Country:</strong> @personal?.Country</p>
+                    <p class="mb-2"><strong>Age:</strong> @personal?.Age</p>
+                </div>
+                <div class="profile-picture">
+
+                    @if (!string.IsNullOrEmpty(personal?.PhotoUrl))
+                    {
+                        <img src="@personal?.PhotoUrl" alt="Profile Picture" class="img-fluid profile-picture" />
+                    }
+                    else
+                    {
+                        <img src="/Images/profile.png" alt="Backup Profile Picture" class="img-fluid profile-picture" />
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+
+            <div class="profile-content">
+                <div class="text-content">
+                    <div class="mb-3">
+                        <label><strong>UserName:</strong></label>
+                        <InputText @bind-Value="editProfile.UserName" placeholder="@personal?.UserName" />
+                    </div>
+                    <div class="mb-3">
+                        <label><strong>Name:</strong></label>
+                        <InputText @bind-Value="editProfile.Name" placeholder="@personal?.Name" />
+                    </div>
+                    <div class="mb-3">
+                        <label><strong>Bio:</strong></label>
+                        <InputText @bind-Value="editProfile.Bio" placeholder="@personal?.Bio" />
+                    </div>
+                    <div class="mb-3">
+                        <label><strong>Country:</strong></label>
+                        <InputText @bind-Value="editProfile.Country" placeholder="@personal?.Country" />
+                    </div>
+                    <div class="mb-3">
+                        <label><strong>Age:</strong></label>
+                        <InputNumber @bind-Value="editProfile.Age" placeholder="@personal?.Age" />
+                    </div>
+                    <div class="mb-3">
+                        <label><strong>Profile Picture:</strong></label>
+                        <InputText @bind-Value="editProfile.PhotoUrl" placeholder="@personal?.PhotoUrl" />
+                    </div>
+                    <button @onclick="SaveProfile" class="button mb-3">Save</button>
+
+                </div>
+
+                <div>
+
+                    @if (!string.IsNullOrEmpty(personal?.PhotoUrl))
+                    {
+                        <img src="@personal?.PhotoUrl" alt="Profile Picture" class="img-fluid profile-picture" />
+                    }
+                    else
+                    {
+                        <img src="/Images/profile.png" alt="Backup Profile Picture" class="img-fluid profile-picture" />
+                    }
+
+
+                </div>
+            </div>
+
+        }
+    </div>
+
+    @if (_showSuccessMessage)
+    {
+        <div class="alert alert-success mt-3" role="alert">
+            Profile updated successfully
+        </div>
+        _showSuccessMessage = false;
+    }
+
+    @if (_showErrorMessage && response.Errors != null && response.Errors.Any())
+    {
+        <div class="alert alert-danger mt-3" role="alert">
+            Failed to update the profile for the following reason:
+            @response.Errors[0]
+        </div>
+        _showErrorMessage = false;
+    }
+</div>
+
+@code {
+    private string LoggedInUser { get; set; }
+    private V3Profile personal = new();
+    private V3PatchProfile editProfile = new();
+    private V3Result<V3Profile> _result;
+    private bool firstRender = true;
+    private bool isEditMode = false;
+    private Guid _loggedInProfileGuid;
+    private bool _showSuccessMessage = false;
+    private bool _showErrorMessage = false;
+    private V3Result<V3Profile> response;
+
+    private void ToggleEditMode()
+    {
+        isEditMode = !isEditMode;
+        _showSuccessMessage = false;
+        _showErrorMessage = false;
+    }
+
+    private async Task SaveProfile()
+    {
+        response = await UserService.UpdateProfileAsync(editProfile, _loggedInProfileGuid);
+        if (response != null)
+        {
+            if (!response.HasErrors)
+            {
+                Console.WriteLine("THIS BITCH HAS NO ERRORS");
+                _showSuccessMessage = true;
+                Logger.LogInformation("Profile updated successfully");
+
+                _result = await UserService.CheckUserAsync(_loggedInProfileGuid);
+                if (_result.Value != null)
+                {
+                    personal = _result.Value;
+                    editProfile = new V3PatchProfile()
+                        {
+                            UserName = personal?.UserName,
+                            Name = personal?.Name,
+                            Bio = personal?.Bio,
+                            Country = personal?.Country,
+                            Age = personal?.Age,
+                            PhotoUrl = personal?.PhotoUrl
+                        };
+                    ToggleEditMode();
+                    await InvokeAsync(StateHasChanged);
+                }
+                else
+                {
+                    Logger.LogError("Profile not found or empty list returned");
+                }
+
+            }
+            else if (response.HasErrors)
+            {
+                _showErrorMessage = true;
+                Logger.LogError("Failed to update profile: {Errors}", response.Errors);
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            LoggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            if (Guid.TryParse(LoggedInUser, out _loggedInProfileGuid))
+            {
+                _result = await UserService.CheckUserAsync(_loggedInProfileGuid);
+
+                if (_result.Value != null)
+                {
+                    personal = _result.Value;
+                }
+                else
+                {
+                    Logger.LogWarning($"Failed to get profile. Guid: {LoggedInUser}");
+                }
+
+                this.firstRender = false;
+                StateHasChanged();
+            }
+            else
+            {
+                Logger.LogError($"Invalid GUID: {_loggedInProfileGuid}.");
+                NavigationManager.NavigateTo("/logout");
+            }
+        }
+    }
+
+
+
+
+
+
+
+
+
+}
+

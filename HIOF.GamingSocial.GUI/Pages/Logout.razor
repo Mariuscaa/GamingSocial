@@ -1,0 +1,13 @@
+﻿@page "/logout"
+@inject HIOF.GamingSocial.GUI.Services.AuthService AuthService
+@inject NavigationManager Navigation
+
+<h1>Logging out..</h1>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await AuthService.Logout();
+        Navigation.NavigateTo($"login");
+    }
+}

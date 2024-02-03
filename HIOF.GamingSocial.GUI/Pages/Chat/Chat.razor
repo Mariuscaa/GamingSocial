@@ -1,0 +1,575 @@
+﻿@page "/chat"
+@using Microsoft.AspNetCore.SignalR.Client
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Model.ProfileInformation
+@using HIOF.GamingSocial.GUI.Model.Chat
+@using System.ComponentModel.DataAnnotations
+@using System.Web;
+
+@implements IAsyncDisposable
+
+@inject NavigationManager NavigationManager
+@inject ILogger<Chat> Logger
+@inject IToastService ToastService
+@inject HIOF.GamingSocial.GUI.Services.FriendService Friendservice
+@inject HIOF.GamingSocial.GUI.Services.UserService UserService
+@inject HIOF.GamingSocial.GUI.Services.ChatAPIService Chatapiservice
+@inject HIOF.GamingSocial.GUI.Services.ChatService ChatService
+@inject HIOF.GamingSocial.GUI.Services.GroupService GroupService
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<PageTitle>Chat</PageTitle>
+
+
+<EditForm Model="@_profile" OnValidSubmit="OnSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="layout">
+        <div class="chat">
+            <h1 class="chat-header">Chat</h1>
+            <div class="chat-box">
+                @{
+                    DateTime? currentDate = null;
+                }
+                @foreach (var message in _messages.AsEnumerable().Reverse())
+                {
+                    if (currentDate == null || message.Timestamp.Date != currentDate)
+                    {
+                        currentDate = message.Timestamp.Date;
+                        <div class="date-divider">@currentDate.Value.ToShortDateString()</div>
+                    }
+                    var isMyMessage = message.Sender == _result.Value.UserName;
+                    var cssClass = isMyMessage ? "my-message" : "other-message";
+                    <div class="message-container">
+                        <p class="sender">@message.Sender</p>
+                        <div class="@cssClass" data-datetime="@message.Timestamp">
+                            <p>@message.Message</p>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="input-area">
+                <div class="form-group">
+                    <label>
+                        Message:
+                        @if (IsConnected)
+                        {
+                            <InputText class="form-control" @bind-Value="_messageInput" />
+                        }
+                    </label>
+                </div>
+                <button type="submit" class="button" disabled="@(!IsConnected)">Send</button>
+            </div>
+        </div>
+        <div class="friends">
+           
+            <label class="contacts">Contacts:</label>
+            @foreach (var friend in _contactList)
+            {
+                <div class="friend" @onclick="() => SelectFriend(friend)" style="cursor: pointer;">
+                    @friend.DisplayName
+                </div>
+            }
+        </div>
+    </div>
+</EditForm>
+
+@if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+
+
+
+@code {
+    public string ErrorMessage { get; set; }
+    public string Parameter { get; set; }
+    private ChatContact _profile = new();
+    private List<ChatContact> _contactList = new List<ChatContact>();
+    private HubConnection? _hubConnection;
+    private List<ChatMessage> _messages = new List<ChatMessage>();
+    private string? _userInput;
+    private string? _messageInput;
+    private string? _targetUser;
+    private V3Result<List<GetChatMessage>> _oldmessagesResultSender;
+    private V3Result<List<GetChatMessage>> _oldmessagesResultReceiver;
+    private V3Result<List<GetChatMessage>> _oldmessagesResultSenderAndReceiver;
+    private V3Result<V3Profile> _result;
+    private V3Result<V3Profile> _resultFromTargetUser;
+    private V3Result<ChatContact> _resultFromTarget;
+    private PostChatMessage _message = new();
+    private Guid _loggedInGuid;
+    private string _loggedInString;
+    private string _timestamp;
+    private List<ProfileWithMemberType> _allMemberProfiles = new();
+    private V3Group? _group = null;
+    private List<V3Group> _myGroups = new();
+    private bool _noUserHasNoGroups;
+    private Guid _guidTargetuser;
+    private Guid _guidUserinput;
+
+    public class ChatContact
+    {
+        public V3Profile? Profile { get; set; }
+        public V3Group? Group { get; set; }
+
+        public string DisplayName
+        {
+            get
+            {
+                if (Profile != null)
+                    return Profile.UserName;
+                else
+                    return Group.GroupName;
+            }
+        }
+    }
+
+
+    private V3GroupMemberships _myGroupMembership = new()
+        {
+            Members = new List<V3Member>()
+        };
+
+    private V3GroupMemberships _allGroupMemberships = new()
+        {
+            Members = new List<V3Member>()
+        };
+
+    public string GroupId { get; set; }
+
+    private int _groupIdAsInt;
+
+    public class ChatMessage
+    {
+        public string Sender { get; set; }
+        public DateTime Timestamp { get; set; }
+        public string Message { get; set; }
+
+        public override string ToString()
+        {
+            return $"{Sender}: at {Timestamp}: {Message}";
+        }
+    }
+
+
+    private async Task SelectFriend(ChatContact contact)
+    {
+        _profile = contact;
+        _messages.Clear();
+        if (contact.Profile != null)
+        {
+            await SelectedFriendChanged(contact);
+        }
+        if (contact.Group != null)
+        {
+            await ChatService.LeaveRoom(contact.Group.GroupName);
+            await SelectedGroupChanged(contact);
+
+        }
+
+    }
+
+    private async Task SelectedGroupChanged(ChatContact contact)
+    {
+        await ChatService.JoinRoom(contact.Group.GroupName);
+        await LoadGroupMembers(contact);
+        await LoadMessagehistory(contact);
+
+    }
+
+
+    private async Task SelectedFriendChanged(ChatContact contact)
+    {
+        _targetUser = contact.Profile.UserName;
+        _resultFromTargetUser = await UserService.LoginAsync(_targetUser);
+        await LoadMessagehistory(contact);
+    }
+
+    private async Task OnSubmit(EditContext editContext)
+    {
+        if (editContext.Validate())
+        {
+            await Send(_profile);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        var uri = new Uri(NavigationManager.Uri);
+        var queryDictionary = HttpUtility.ParseQueryString(uri.Query);
+        Parameter = queryDictionary["parameter"];
+
+
+        _loggedInString = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+        _loggedInGuid = Guid.Parse(_loggedInString);
+        _result = await UserService.CheckUserAsync(_loggedInGuid);
+
+        _userInput = _result.Value.UserName;
+
+        if (Parameter!= null)
+        {
+            _targetUser = Parameter;
+        }
+
+        await ChatService.StartAsync();
+
+        ChatService.OnMessageReceived += HandleMessageReceived; 
+        ChatService.OnGroupMessageReceived += HandleGroupMessageReceived;
+
+        if (!string.IsNullOrEmpty(_userInput))
+        {
+            await ChatService.ConnectUser(_userInput);
+        }
+        await LoadGroups();
+    }
+
+    private void HandleGroupMessageReceived(string roomName, string user, string message)
+    {
+        var chatMessage = (new ChatMessage
+            {
+                Sender = "System",
+                Message = "This is a work in progress.",
+                Timestamp = DateTime.Now
+            });
+        _messages.Add(chatMessage);
+        InvokeAsync(() =>
+        {
+            StateHasChanged();
+        });
+    }
+
+    private void HandleMessageReceived(string user, string message)
+    {
+        _timestamp = DateTime.Now.ToString();
+        var chatMessage = new ChatMessage
+            {
+                Sender = user,
+                Message = message,
+                Timestamp = DateTime.Parse(_timestamp),
+            };
+        _messages.Add(chatMessage);
+        InvokeAsync(() =>
+        {
+            StateHasChanged();
+        });
+    }
+
+
+    private async Task LoadGroups()
+    {
+
+        var getGroupsResult = await GroupService.GetGroupsForProfileAsync(_loggedInGuid);
+
+        if (getGroupsResult.Errors.Count != 0)
+        {
+            if (getGroupsResult.Errors.Contains($"There are no groups for the profile ID {_loggedInGuid} in the database."))
+            {
+                _noUserHasNoGroups = true;
+            }
+            else
+            {
+                Logger.LogWarning("Error during search: " + string.Join(", ", getGroupsResult.Errors));
+            }
+        }
+        else
+        {
+            _noUserHasNoGroups = false;
+
+            foreach (var groupId in getGroupsResult.Value.GroupIds)
+            {
+                var getGroupResult = await GroupService.GetSingleGroupAsync(groupId);
+                if (getGroupsResult.Errors.Count != 0)
+                {
+                    if (getGroupResult.Errors.Contains($"No group found with the search `{groupId}`."))
+                    {
+                        Logger.LogWarning($"No group found with search {groupId}. Group exists in GroupMembership, but not in Group.");
+                    }
+                    else
+                    {
+                        Logger.LogWarning("Error during search: " + string.Join(", ", getGroupResult.Errors));
+                    }
+                }
+                else
+                {
+                    _myGroups.Add(getGroupResult.Value);
+                    _contactList.Add(new ChatContact { Group = getGroupResult.Value });
+                }
+            }
+        }
+    }
+
+
+    private async Task LoadGroupMembers(ChatContact contact)
+    {
+        var LoggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+        if (Guid.TryParse(LoggedInUser, out _loggedInGuid))
+        {
+            var groupMembershipResult = await GroupService.GetGroupMembership(_loggedInGuid, contact.Group.GroupId/*_groupIdAsInt*/);
+            if (groupMembershipResult.Errors.Count != 0)
+            {
+                Logger.LogWarning("Error getting group membership status: " + string.Join(", ", groupMembershipResult.Errors));
+                return;
+            }
+            else
+            {
+                _myGroupMembership = groupMembershipResult.Value;
+            }
+
+            var allGroupMembershipsResult = await GroupService.GetAllGroupMembersAsync(contact.Group.GroupId);
+
+            if (allGroupMembershipsResult.Errors.Count != 0)
+            {
+                Logger.LogWarning("Error getting group members: " + string.Join(", ", allGroupMembershipsResult.Errors));
+                return;
+            }
+            else
+            {
+                _allGroupMemberships = allGroupMembershipsResult.Value;
+                foreach (var member in _allGroupMemberships.Members)
+                {
+                    var getProfileResult = await UserService.CheckUserAsync(member.ProfileGuid);
+                    if (getProfileResult.Errors.Count != 0)
+                    {
+                        Logger.LogWarning($"Error getting profile in group {_allGroupMemberships.GroupId}: " + string.Join(", ", getProfileResult.Errors));
+                    }
+                    else
+                    {
+                        var profileWithMemberType = new ProfileWithMemberType()
+                            {
+                                Profile = getProfileResult.Value,
+                                MemberType = member.MemberType
+                            };
+                        _allMemberProfiles.Add(profileWithMemberType);
+                    }
+                }
+            }
+        }
+        else
+        {
+            Logger.LogError($"Invalid GUID: {_loggedInGuid}.");
+            NavigationManager.NavigateTo("/logout");
+        }
+        StateHasChanged();
+
+    }
+
+    private async Task Send(ChatContact contact)
+    {
+        if (contact.Profile != null)
+        {
+            if (ChatService != null)
+            {
+                _timestamp = DateTime.Now.ToString();
+
+                await ChatService.SendMessageToUser(_targetUser, _userInput, _messageInput, _timestamp);
+                var chatMessage = new ChatMessage
+                    {
+                        Sender = _userInput,
+                        Message = _messageInput,
+                        Timestamp = DateTime.Parse(_timestamp),
+                    };
+                _messages.Add(chatMessage);
+
+                _guidTargetuser = _resultFromTargetUser.Value.ProfileGuid;
+                _guidUserinput = _result.Value.ProfileGuid;
+
+                _message.Sender = _guidUserinput;
+                _message.Reciever = _guidTargetuser;
+                _message.groupid = 0;
+                _message.Message = _messageInput;
+                _message.MessageSent = _timestamp;
+
+                await Chatapiservice.CreateMessageAsync(_message);
+                _messageInput = string.Empty;
+                StateHasChanged();
+            }
+        }
+        if (contact.Group != null)
+        {
+
+            _timestamp = DateTime.Now.ToString();
+            await ChatService.SendMessageToGroup(contact.Group.GroupName, _userInput, _messageInput, _timestamp);
+            //var chatMessage = new ChatMessage
+            //    {
+            //        Sender = _userInput,
+            //        Message = _messageInput,
+            //        Timestamp = DateTime.Parse(_timestamp),
+            //    };
+
+            var chatMessage = (new ChatMessage
+                {
+                    Sender = "System",
+                    Message = "GroupChat is a work in progress. However you can chat with friends instead.",
+                    Timestamp = DateTime.Now
+                });
+            _messages.Add(chatMessage);
+
+            _guidTargetuser = _resultFromTargetUser.Value.ProfileGuid;
+            _guidUserinput = _result.Value.ProfileGuid;
+
+            _message.Sender = _guidUserinput;
+            _message.groupid = contact.Group.GroupId;
+            _message.Message = _messageInput;
+            _message.MessageSent = _timestamp;
+
+            await Chatapiservice.CreateMessageAsync(_message);
+            _messageInput = string.Empty;
+            StateHasChanged();
+        }
+    }
+
+    public bool IsConnected =>
+    ChatService?.IsConnected ?? false;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (ChatService != null)
+        {
+            await ChatService.StopAsync();
+        }
+    }
+
+    private async Task LoadFriends()
+    {
+        if (Guid.TryParse(_loggedInString, out Guid _loggedInGuid))
+        {
+            var friendsguids = await Friendservice.CheckFriendsAsync(_loggedInGuid);
+            if (!friendsguids.HasErrors)
+            {
+                foreach (Guid friendGuid in friendsguids.Value)
+                {
+                    var friend = await UserService.CheckUserAsync(friendGuid);
+                    _contactList.Add(new ChatContact { Profile = friend.Value });
+                }
+            }
+        }
+    }
+    private async Task LoadMessagehistory(ChatContact contact)
+    {
+        if (_contactList.Count > 0)
+        {
+            if (contact.Profile != null)
+            {
+                if (Guid.TryParse(_loggedInString, out Guid _loggedInGuid))
+                {
+                    _result = await UserService.CheckUserAsync(_loggedInGuid);
+                    _userInput = _result.Value.UserName;
+                    await ChatService.StartAsync();
+
+                    if (!string.IsNullOrEmpty(_userInput))
+                    {
+                        await ChatService.ConnectUser(_userInput);
+                    }
+
+                    _targetUser = contact.Profile.UserName;
+                    _resultFromTargetUser = await UserService.LoginAsync(_targetUser);
+                    _oldmessagesResultSender = await Chatapiservice.UserLoadMessageAsync(_result.Value.ProfileGuid, _resultFromTargetUser.Value.ProfileGuid);
+
+                    _oldmessagesResultReceiver = await Chatapiservice.UserLoadMessageAsync(_resultFromTargetUser.Value.ProfileGuid, _result.Value.ProfileGuid);
+
+                    if (!_oldmessagesResultSender.HasErrors && _oldmessagesResultSender.Value != null)
+                    {
+                        foreach (GetChatMessage oldmessage in _oldmessagesResultSender.Value)
+                        {
+                            _messages.Add(new ChatMessage
+                                    {
+                                        Sender = _result.Value.UserName,
+                                        Timestamp = DateTime.Parse(oldmessage.MessageSent),
+                                        Message = oldmessage.Message
+                                    });
+                        }
+
+                    }
+
+
+
+                    if (!_oldmessagesResultReceiver.HasErrors && _oldmessagesResultReceiver.Value != null)
+                    {
+                        foreach (GetChatMessage oldmessage in _oldmessagesResultReceiver.Value)
+                        {
+                            _messages.Add(new ChatMessage
+                                    {
+                                        Sender = _resultFromTargetUser.Value.UserName,
+                                        Timestamp = DateTime.Parse(oldmessage.MessageSent),
+                                        Message = oldmessage.Message
+                                    });
+                        }
+                    }
+                    _messages = _messages.OrderBy(m => m.Timestamp).ToList();
+
+                    if (_oldmessagesResultReceiver.Value != null && _oldmessagesResultReceiver.Value.Count > 0)
+                    {
+                        _oldmessagesResultReceiver.Value.Clear();
+                    }
+
+                    if (_oldmessagesResultSender.Value != null && _oldmessagesResultSender.Value.Count > 0)
+                    {
+                        _oldmessagesResultSender.Value.Clear();
+                    }
+
+                }
+            }
+
+
+            if (contact.Group != null)
+            {
+                await ChatService.StartAsync();
+
+                if (Guid.TryParse(_loggedInString, out Guid _loggedInGuid))
+                {
+                    _result = await UserService.CheckUserAsync(_loggedInGuid);
+                    _userInput = _result.Value.UserName;
+                    if (!string.IsNullOrEmpty(_userInput))
+                    {
+                        await ChatService.ConnectUser(_userInput);
+                    }
+                    _oldmessagesResultSenderAndReceiver = await Chatapiservice.LoadGroupSenderMessageAsync(contact.Group.GroupId);
+
+                    if (!_oldmessagesResultSenderAndReceiver.HasErrors && _oldmessagesResultSenderAndReceiver.Value != null)
+                    {
+
+                        foreach (GetChatMessage oldmessage in _oldmessagesResultSenderAndReceiver.Value)
+                        {
+                            var checkmemb = await UserService.CheckUserAsync(oldmessage.Sender.Value);
+                            _userInput = checkmemb.Value.UserName;
+
+                            _messages.Add(new ChatMessage
+                                    {
+                                        Sender = "System",
+                                        Message = "GroupChat is a work in progress. However you can chat with friends instead.",
+                                        Timestamp = DateTime.Now
+                                    });
+                        }
+                    }
+
+                    _messages = _messages.OrderBy(m => m.Timestamp).ToList();
+
+                    _oldmessagesResultSenderAndReceiver.Value.Clear();
+                }
+            }
+        }
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadFriends();
+            if (_contactList.Count>0)
+            { 
+                if (Parameter  != null)
+                {
+                    int index = _contactList.FindIndex(x => x.Profile.UserName == Parameter);
+                    await LoadMessagehistory(_contactList[index]);
+
+                }
+                
+            }
+
+        }
+    }
+}

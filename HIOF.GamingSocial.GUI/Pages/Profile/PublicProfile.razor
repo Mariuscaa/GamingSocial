@@ -1,0 +1,171 @@
+﻿@page "/profile/{ProfileGuid}"
+@using HIOF.GamingSocial.GUI.Model.ProfileInformation
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Services
+@inject UserService UserService
+@inject FriendService FriendService
+@inject InviteService InviteService
+@inject NavigationManager NavigationManager
+@inject ILogger<PublicProfile> Logger
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject Blazored.Toast.Services.IToastService ToastService
+
+
+<div class="container">
+    @if (_publicProfile == null)
+    {
+        <p>@_pageStatus</p>
+    }
+    else
+    {
+        <div class="header-container">
+            <h3>@_publicProfile.UserName</h3>
+        </div>
+
+        <div class="profile-content">
+            <div class="text-content">
+                @if (!(_isFriends || _loggedInProfileGuid == _publicProfile.ProfileGuid))
+                {
+                    <button @onclick="SendFriendInvite" class="button mb-3">Add Friend</button>
+                }
+                else if (_isFriends)
+                {
+                    <button class="button mb-3" onclick="@(() => NavigationManager.NavigateTo($"chat?parameter={_publicProfile.UserName}"))">Chat</button>
+                }
+
+                <p class="mb-2"><strong>Name:</strong> @_publicProfile?.Name</p>
+                <p class="mb-2"><strong>Bio:</strong> @_publicProfile?.Bio</p>
+                <p class="mb-2"><strong>Country:</strong> @_publicProfile?.Country</p>
+                <p class="mb-2"><strong>Age:</strong> @_publicProfile?.Age</p>
+            </div>
+            <div>
+                @if (!string.IsNullOrEmpty(_publicProfile?.PhotoUrl))
+                {
+                    <img src="@_publicProfile?.PhotoUrl" alt="Profile Picture" class="img-fluid profile-picture" />
+                }
+                else
+                {
+                    <img src="/Images/profile.png" alt="Backup Profile Picture" class="img-fluid profile-picture" />
+                }
+            </div>
+        </div>
+
+        @if (_isFriends)
+        {
+            <button @onclick="RemoveFriend" class="button mb-3">Remove as friend</button>
+        }
+    }
+</div>
+
+
+@code {
+    [Parameter]
+    public string ProfileGuid { get; set; }
+    private Guid _profileGuidAsGuid;
+    private Guid _loggedInProfileGuid;
+    private string _pageStatus { get; set; } = "Loading...";
+    private bool _isFriends;
+
+    private V3Result<V3Profile>? _result;
+    private V3Profile? _publicProfile = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Guid.TryParse(ProfileGuid, out _profileGuidAsGuid))
+        {
+            _pageStatus = $"{ProfileGuid} is not a valid profile guid.";
+            Logger.LogWarning($"{ProfileGuid} is not a valid profile guid.");
+            return;
+        }
+
+        else
+        {
+            var profileResult = await UserService.CheckUserAsync(_profileGuidAsGuid);
+            if (profileResult.Errors.Count != 0)
+            {
+                _pageStatus = "Error getting profile information: " + string.Join(", ", profileResult.Errors);
+                Logger.LogWarning("Error getting profile information: " + string.Join(", ", profileResult.Errors));
+                return;
+            }
+            else
+            {
+                _publicProfile = profileResult.Value;
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var loggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            if (Guid.TryParse(loggedInUser, out _loggedInProfileGuid))
+            {
+                var friendCheckResult = await FriendService.CheckIfFriendsAsync(_loggedInProfileGuid, _profileGuidAsGuid);
+                if (friendCheckResult.Errors.Count != 0)
+                {
+                    _pageStatus = "Error checking if friends: " + string.Join(", ", friendCheckResult.Errors);
+                    Logger.LogWarning("Error checking if friends: " + string.Join(", ", friendCheckResult.Errors));
+                    return;
+                }
+                else
+                {
+                    _isFriends = friendCheckResult.Value;
+                }
+            }
+            else
+            {
+                Logger.LogError("Invalid GUID.");
+                NavigationManager.NavigateTo("/logout");
+            }
+
+            StateHasChanged();
+
+        }
+    }
+
+    private async Task SendFriendInvite()
+    {
+        var postInvite = new V3PostInvite()
+            {
+                InviteType = "Friend",
+                ReceiverGuid = _publicProfile.ProfileGuid,
+                SenderGuid = _loggedInProfileGuid
+            };
+        var inviteResult = await InviteService.SendInviteAsync(postInvite);
+
+        if (inviteResult.Errors.Count != 0)
+        {
+            if (inviteResult.Errors.Contains("Invite already exists."))
+            {
+                Logger.LogWarning($"Invite already exists for {postInvite.ReceiverGuid}");
+                ToastService.ShowWarning("Invite already exists.");
+            }
+            else
+            {
+                Logger.LogWarning("Error when sending invite: " + string.Join(", ", inviteResult.Errors));
+            }
+        }
+        else
+        {
+            Logger.LogInformation($"Invite sent to {postInvite.ReceiverGuid}.");
+            ToastService.ShowSuccess("Friend request sent!");
+
+        }
+    }
+    private async Task RemoveFriend()
+    {
+        var removeFriendResult = await FriendService.RemoveFriendAsync(_loggedInProfileGuid, _profileGuidAsGuid);
+        if (removeFriendResult.Errors.Count != 0){
+
+            Logger.LogError("Error while removing friendship: " + string.Join(", ", removeFriendResult.Errors));
+            ToastService.ShowWarning("Failed to remove friendship.");
+        }
+        else {
+            _isFriends = false;
+            ToastService.ShowInfo("Friend has been removed.");
+        }
+        StateHasChanged();
+    }
+
+}

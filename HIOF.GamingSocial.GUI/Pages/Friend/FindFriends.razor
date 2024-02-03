@@ -1,0 +1,251 @@
+﻿@page "/find-friends"
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Model.ProfileInformation;
+@using HIOF.GamingSocial.GUI.Services
+@using HIOF.GamingSocial.GUI.Components
+@inject ILogger<FindFriends> Logger
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject UserService UserService
+@inject NavigationManager NavigationManager
+@inject IToastService ToastService
+@inject GameService GameService
+
+
+<div class="container">
+    <div class="header-container">
+        <h1>Find Friends</h1>
+    </div>
+
+    <h2>Search by username</h2>
+
+    <form @onsubmit="PerformSearchForProfiles">
+        <div class="form-group">
+            <input type="text" class="form-control" @bind="_searchQueryForProfiles" placeholder="Enter your search query" />
+        </div>
+        <button type="submit" class="button">Search</button>
+    </form>
+
+
+    @if (_searchResult != null && _searchResult.Count > 0)
+    {
+    <div class="profile-discovery-box">
+        @if (_isLoading)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else if (_noProfilesInSearch)
+        {
+            <p>Got nothing, try with something else.</p>
+        }
+        else
+        {
+            @if (_searchResult.Count > 0)
+            {
+                <div class="friend-list">
+                    @foreach (var profile in _searchResult)
+                    {
+                        <div class="friend-item">
+
+                                @if (!string.IsNullOrEmpty(@profile.PhotoUrl))
+                                {
+                                    <img src="@profile.PhotoUrl" alt="@profile.UserName's Picture" class="img-fluid profile-picture" />
+                                }
+                                else
+                                {
+                                    <img src="/Images/profile.png" alt="Backup Profile Picture" class="img-fluid profile-picture" />
+                                }
+
+                           
+                            <div class="friend-name">
+                                <a href="@($"profile/{profile.ProfileGuid}")">@profile.UserName</a>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+    }
+
+    <div class="profile-discovery-box">
+        <h2>Explore with our Profile Discovery</h2>
+        <p>Find new potential friends with this exploration feature.</p>
+        <!--... Rest of your HTML code for this section ...-->
+   
+
+
+        <Checkbox Checked="@_isSpecificGame" CheckedChanged="@(val => _isSpecificGame = val)" OnChanged="@HandleCheckboxChange">Specific game</Checkbox>
+        @if (_isSpecificGame)
+        {
+            <div class="form-group">
+                <input type="text" @oninput="OnInput" @bind-value="_searchQueryForGames" class="form-control" placeholder="Enter your search query" />
+                <InputSelect @bind-Value="@_specificGameId" class="form-control mt-2" size="5">
+                    @foreach (var game in _gameList)
+                    {
+                        <option value="@game.Id">@game.GameTitle</option>
+                    }
+                </InputSelect>
+            </div>
+        }
+        <Checkbox Checked="@_isGamesInCommon" CheckedChanged="@(val => _isGamesInCommon = val)" Disabled="@IsEitherChecked">Games in common</Checkbox>
+
+
+        <button class="button" @onclick="PerformProfileDiscovery">Try your luck!</button>
+
+
+        @if (_isLoadingProfileDiscovery)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else
+        {
+            @if (_discoveredProfile != null)
+            {
+                <p>Profile discovered! <a href="@($"profile/{_discoveredProfile.ProfileGuid}")" target="_blank">@_discoveredProfile.UserName</a></p>
+            }
+        }
+    </div>
+</div>
+
+
+
+
+
+@code {
+    private string _searchQueryForProfiles;
+    private List<V3Profile> _searchResult = new();
+    private bool _noProfilesInSearch;
+    private bool _isLoading;
+    private bool _isLoadingProfileDiscovery;
+    private Guid _loggedInProfileGuid;
+    private V3Profile _discoveredProfile;
+    private bool _isSpecificGame { get; set; }
+    private bool _isGamesInCommon { get; set; }
+    private int _specificGameId { get; set; }
+
+    private List<V3VideoGameInformation> _gameList = new List<V3VideoGameInformation>();
+    private DateTime _lastKeystroke;
+    private bool _noGamesFound = false;
+    private string _searchQueryForGames;
+
+    private readonly TimeSpan _debouncePeriod = TimeSpan.FromMilliseconds(500);
+
+    private async void OnInput(ChangeEventArgs e)
+    {
+        _lastKeystroke = DateTime.Now;
+        _searchQueryForGames = e.Value.ToString();
+        await Task.Delay(_debouncePeriod);
+        if (DateTime.Now - _lastKeystroke >= _debouncePeriod)
+        {
+            await PerformSearchForGames();
+        }
+    }
+
+
+    private bool IsEitherChecked => _isSpecificGame;
+
+    private void HandleCheckboxChange()
+    {
+        if (IsEitherChecked)
+        {
+            _isGamesInCommon = false;
+        }
+    }
+
+    private async Task PerformSearchForGames()
+    {
+        _gameList.Clear();
+        var searchResult = await GameService.Search(_searchQueryForGames);
+
+        if (searchResult.Errors.Count != 0)
+        {
+            if (searchResult.Errors.Contains($"No games found with the search `{_searchQueryForGames}`"))
+            {
+                _noGamesFound = true;
+                Logger.LogWarning($"No games found with search {_searchQueryForGames}");
+            }
+
+            else
+            {
+                Logger.LogWarning("Error during search: " + string.Join(", ", searchResult.Errors));
+
+            }
+        }
+        else
+        {
+            _noGamesFound = false;
+            _gameList = searchResult.Value.ToList();
+        }
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var loggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            if (Guid.TryParse(loggedInUser, out _loggedInProfileGuid))
+            {
+                
+            }
+            else
+            {
+                Logger.LogError("Invalid GUID.");
+                NavigationManager.NavigateTo("/logout");
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task PerformSearchForProfiles()
+    {
+        _isLoading = true;
+        _searchResult.Clear();
+        var searchResult = await UserService.GetProfilesAsync(_searchQueryForProfiles);
+
+        if (searchResult.Errors.Count != 0)
+        {
+            if (searchResult.Errors.Contains($"No profiles found with the search `{_searchQueryForProfiles}`"))
+            {
+                _noProfilesInSearch = true;
+                Logger.LogWarning($"No profiles found with search {_searchQueryForProfiles}");
+            }
+
+            else
+            {
+                Logger.LogWarning("Error during search: " + string.Join(", ", searchResult.Errors));
+
+            }
+        }
+        else
+        {
+            _searchResult = searchResult.Value;
+        }
+        _isLoading = false;
+        StateHasChanged();
+    }
+    private async Task PerformProfileDiscovery()
+    {
+        _isLoadingProfileDiscovery = true;
+        _discoveredProfile = null;
+        var profileDiscoveryResult = await UserService.DiscoverNewProfileAsync(_loggedInProfileGuid, _specificGameId, _isGamesInCommon);
+
+        if (profileDiscoveryResult.Errors.Count != 0)
+        {
+            if (profileDiscoveryResult.Errors.Contains("Could not find any other users with the given search parameters."))
+            {
+                ToastService.ShowInfo("Could not find any groups with your search.");
+            }
+            else
+            Logger.LogWarning("Error during profile discovery: " + string.Join(", ", profileDiscoveryResult.Errors));
+        }
+        else
+        {
+            _discoveredProfile = profileDiscoveryResult.Value;
+            
+        }
+        _isLoadingProfileDiscovery = false;
+        StateHasChanged();
+    }
+}

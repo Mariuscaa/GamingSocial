@@ -1,0 +1,46 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	<PropertyGroup>
+		<TargetFramework>net7.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <Compile Remove="Configuration\**" />
+	  <Content Remove="Configuration\**" />
+	  <EmbeddedResource Remove="Configuration\**" />
+	  <None Remove="Configuration\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Remove="Protos\shared_messages.proto" />
+		<None Remove="Protos\videogame.proto" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Include="wwwroot\Images\profile.png" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Blazored.LocalStorage" Version="4.3.0" />
+		<PackageReference Include="Blazored.SessionStorage" Version="2.3.0" />
+		<PackageReference Include="Blazored.Toast" Version="4.1.0" />
+		<PackageReference Include="Google.Protobuf" Version="3.23.1" />
+		<PackageReference Include="Grpc.Net.Client" Version="2.53.0" />
+		<PackageReference Include="Grpc.Tools" Version="2.54.0">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" />
+		<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="7.0.5" />
+		<PackageReference Include="MudBlazor" Version="6.2.5" />
+		<PackageReference Include="Radzen.Blazor" Version="4.10.4" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Protobuf Include="Protos\shared_messages.proto" GrpcServices="Server" />
+		<Protobuf Include="Protos\videogame.proto" GrpcServices="Client" />
+	</ItemGroup>
+
+</Project>

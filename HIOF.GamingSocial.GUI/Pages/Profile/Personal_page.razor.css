@@ -1,0 +1,67 @@
+﻿
+
+.container {
+    margin-top: 3rem;
+    padding: 2rem;
+    width: 100%;
+
+    background-color: white;
+    border: 0.1rem solid #ccc;
+    border-radius: 2rem;
+    box-shadow: 0rem 0rem 0.6rem rgba(0, 0, 0, 0.1);
+}
+
+
+
+h3 {
+    text-align: center;
+    font-size: 2em; /* adjust as needed */
+    font-weight: bold;
+    margin: 3rem 0 3rem 0;
+    color: #2b3e2a;;
+}
+
+.button {
+    background-color: #2b3e2a; 
+    border-radius: 1rem 1rem;
+    border-color:black;
+    color: white;
+    text-align: center;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    font-weight: bold;
+}
+
+    .button:hover {
+        background-color: #1a2617;
+        filter: brightness(90%); /* Darken the text on hover */
+        text-decoration: underline White; /* underline  on hover */
+    }
+
+
+    .button:active {
+        color: lightgrey; /* Color change on click */
+    }
+
+.text-content {
+    
+    margin-top: 5rem;
+    display: flex;
+    justify-content: flex-start;
+    flex-direction: column;
+    margin-right: 0.5rem;
+    word-break: break-word;
+}
+
+.profile-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+}
+
+.profile-picture {
+    border-radius: 50rem;
+    max-height: 25rem;
+    max-width: 25rem;
+}

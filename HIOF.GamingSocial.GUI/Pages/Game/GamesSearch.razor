@@ -1,0 +1,127 @@
+﻿@page "/games-search"
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Services
+@inject GameService GameService
+@inject CooldownService CooldownService
+@inject ILogger<GamesSearch> logger
+@inject IToastService ToastService
+
+<div class="container">
+    <div class="header-container">
+        <h1>Search for games</h1>
+    </div>
+
+    <div class="search-container">
+        <form @onsubmit="PerformSearchForGames">
+            <div class="form-group">
+                <div class="input-group">
+                    <input type="text" class="form-control" @bind="_searchQuery" disabled="@_isUpdatingGameList" placeholder="Enter your search query" />
+                    <button type="submit" disabled="@_isUpdatingGameList" class="button">Search</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    @if (_noGamesFound)
+    {
+        <div class="alert alert-danger mt-3" role="alert">
+            No games found with search: @_searchQuery
+        </div>
+    }
+    else if (_gameList != null && _gameList.Count > 0)
+    {
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var game in _gameList)
+                    {
+                        <tr>
+                            <td>
+                                <a href="@($"game/{game.Id}")">@game.GameTitle</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <div class="update-container">
+        <h3>Not finding a new game? Try updating the list of games:</h3>
+        <p>Note that this update will take roughly 30 seconds.</p>
+        <button class="button" @onclick="UpdateGameDatabase" disabled="@(!CooldownService.CanUpdate())">Update game list</button>
+        @if (!CooldownService.CanUpdate())
+        {
+            <span class="disabledtekst">  Currently on global cooldown (5 minutes)</span>
+        }
+    </div>
+
+    @if (_isUpdatingGameList)
+    {
+        <div class="alert alert-info mt-3" role="alert">
+            Updating game list...
+        </div>
+    }
+</div>
+
+@code {
+    private string _searchQuery;
+    private bool _noGamesFound = false;
+    private bool _isUpdatingGameList = false;
+
+    private List<V3VideoGameInformation> _gameList = new List<V3VideoGameInformation>();
+    private List<V3VideoGameInformation> _newGameList = new List<V3VideoGameInformation>();
+
+
+    private async void PerformSearchForGames()
+    {
+        _gameList.Clear();
+        var searchResult = await GameService.Search(_searchQuery);
+
+        if (searchResult.Errors.Count != 0)
+        {
+            if (searchResult.Errors.Contains($"No games found with the search `{_searchQuery}`"))
+            {
+                _noGamesFound = true;
+                logger.LogWarning($"No games found with search {_searchQuery}");
+            }
+
+            else
+            {
+                logger.LogWarning("Error during search: " + string.Join(", ", searchResult.Errors));
+            }
+        }
+        else
+        {
+            _noGamesFound = false;
+            _gameList = searchResult.Value.ToList();
+        }
+        StateHasChanged();
+    }
+
+    private async Task UpdateGameDatabase()
+    {
+        _isUpdatingGameList = true;
+        CooldownService.Update();
+        _newGameList = await GameService.UpdateGameListAsync();
+
+        if (_newGameList.Count == 0)
+        {
+            ToastService.ShowInfo("Found no new games");
+            logger.LogWarning("No new games found");
+        }
+        else
+        {
+            ToastService.ShowSuccess($"Found {_newGameList.Count} new games! You can try to search again.");
+            logger.LogInformation($"Found {_newGameList.Count} new games");
+        }
+        _isUpdatingGameList = false;
+        StateHasChanged();
+    }
+}
+

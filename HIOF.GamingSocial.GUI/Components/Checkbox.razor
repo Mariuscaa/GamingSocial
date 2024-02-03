@@ -1,0 +1,22 @@
+﻿<div class="form-check">
+    <input class="form-check-input" type="checkbox" value="" id="checkbox-@Id" checked="@Checked" disabled="@Disabled" @onchange="HandleChange" />
+    <label class="form-check-label" for="checkbox-@Id">
+        @ChildContent
+    </label>
+</div>
+
+@code {
+    [Parameter] public bool Checked { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string Id { get; set; } = Guid.NewGuid().ToString();
+    [Parameter] public EventCallback<bool> CheckedChanged { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public RenderFragment ChildContent { get; set; }
+
+    private async Task HandleChange(ChangeEventArgs e)
+    {
+        Checked = (bool)e.Value;
+        await CheckedChanged.InvokeAsync(Checked);
+        await OnChanged.InvokeAsync(null);
+    }
+}

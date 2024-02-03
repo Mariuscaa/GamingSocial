@@ -1,0 +1,173 @@
+﻿@page "/gametimeplanner"
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Services
+@inject ILogger<GameTimePlanner> Logger
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject UserService UserService
+@inject GameTimePlannerService GameTimePlannerService
+@inject NavigationManager NavigationManager
+@inject GameService GameService
+@inject GroupService GroupService
+
+<h1>GameTimePlanner</h1>
+<div class="container">
+    <div class="header-container">
+        <h2>Your plans</h2>
+    </div>
+
+    @if (_isLoading == true)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        @if (_userHasNoGroups)
+        {
+            <p>No groups found for this user. Groups are needed for this feature.</p>
+        }
+        else if (_userHasNoPlans)
+        {
+            <p>No plans found for any of the user's groups.</p>
+        }
+        else
+        {
+            <div class="your-plans-box ">
+                <div class="card-columns">
+                    @foreach (var plan in _myPlans.OrderBy(p => p.GameTimePlan.StartTime))
+                    {
+                        <div class="friend-item">
+                            <div class="card-body">
+                                <h5 class="friend-name">@plan.GameTimePlan.Name</h5>
+                                <h6>@plan.Game.GameTitle</h6>
+                                <p class="card-text">
+                                    <strong>Start: </strong>@plan.GameTimePlan.StartTime.Date.ToShortDateString()<br />
+                                    <strong>Time: </strong>@plan.GameTimePlan.StartTime.TimeOfDay.ToString(@"hh\:mm")
+                                </p>
+                                <p class="card-text">
+                                    <strong>End: </strong>@plan.GameTimePlan.EndTime.Date.ToShortDateString()<br />
+                                    <strong>Time: </strong>@plan.GameTimePlan.EndTime.TimeOfDay.ToString(@"hh\:mm")
+                                </p>
+                                <a href="@($"gametimeplan/{plan.GameTimePlan.GameTimePlanId}")" class="button">View details</a>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        <div class="header-container">
+            <h2>
+                <button class="button" @onclick="@(() => NavigationManager.NavigateTo("create-gametimeplan"))">Create a new plan</button>
+            </h2>
+        </div>
+    }
+</div>
+
+@code {
+    private Guid _loggedInProfileGuid;
+    private bool _userHasNoGroups;
+    private bool _userHasNoPlans;
+    private bool _isLoading = true;
+
+    private List<PlanWithGame> _myPlans = new();
+    private List<V3Group> _groupList = new List<V3Group>();
+    private List<V3Group> _myGroups = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _isLoading = true;
+            var LoggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            if (Guid.TryParse(LoggedInUser, out _loggedInProfileGuid))
+            {
+                var getGroupsResult = await GroupService.GetGroupsForProfileAsync(_loggedInProfileGuid);
+
+                if (getGroupsResult.Errors.Count != 0)
+                {
+                    if (getGroupsResult.Errors.Contains($"There are no groups for the profile ID {_loggedInProfileGuid} in the database."))
+                    {
+                        _userHasNoGroups = true;
+                    }
+
+                    else
+                    {
+                        Logger.LogWarning("Error during group lookup: " + string.Join(", ", getGroupsResult.Errors));
+                    }
+                }
+                else
+                {
+                    _userHasNoGroups = false;
+
+                    foreach (var groupId in getGroupsResult.Value.GroupIds)
+                    {
+                        var getGroupResult = await GroupService.GetSingleGroupAsync(groupId);
+                        if (getGroupsResult.Errors.Count != 0)
+                        {
+                            if (getGroupResult.Errors.Contains($"No group found with the search `{groupId}`."))
+                            {
+                                Logger.LogWarning($"No group found with search {groupId}. Group exists in GroupMembership, but not in Group.");
+                            }
+
+                            else
+                            {
+                                Logger.LogWarning("Error during search: " + string.Join(", ", getGroupResult.Errors));
+                            }
+                        }
+                        else
+                        {
+                            _myGroups.Add(getGroupResult.Value);
+                        }
+                    }
+                    if (_myGroups.Count == 0)
+                    {
+                        _userHasNoGroups = true;
+                    }
+                    else
+                    {
+                        foreach (var group in _myGroups)
+                        {
+                            var plansForGroup = await GameTimePlannerService.GetGameTimePlansAsync(group.GroupId);
+                            if (plansForGroup.Errors.Count > 0)
+                            {
+                                Logger.LogWarning($"Error getting plans for group {group.GroupId}: {string.Join(", ", plansForGroup.Errors)}");
+                            }
+                            else
+                            {
+                                foreach (var plan in plansForGroup.Value)
+                                {
+                                    var game = await GameService.GetSingleGameAsync(plan.GameId);
+                                    if (game.Errors.Count > 0)
+                                    {
+                                        Logger.LogWarning($"Error getting game for plan {plan.GameTimePlanId}: {string.Join(", ", game.Errors)}");
+                                    }
+                                    else
+                                    {
+                                        _myPlans.Add(new PlanWithGame(plan, game.Value));
+                                    }
+                                }
+                            }
+                        }
+                        if (_myPlans.Count == 0)
+                        {
+                            _userHasNoPlans = true;
+                        }
+                        else
+                        {
+                            _userHasNoPlans = false;
+
+                        }
+                    }
+                }
+            }
+
+
+            else
+            {
+                Logger.LogWarning($"Could not parse {LoggedInUser} to a Guid.");
+                NavigationManager.NavigateTo("/logout");
+            }
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

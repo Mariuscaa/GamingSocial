@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+
+package sharedprotos;
+
+message EmptyRequest {}
+
+message OkMessage {
+    string textMessage = 1;
+}
+
+message ProtoResult {
+  oneof result {
+    string error = 1;
+    ResultValue value = 2;
+  }
+
+  repeated string errors = 3;
+
+  message ResultValue {
+    google.protobuf.Any value = 1;
+  }
+}

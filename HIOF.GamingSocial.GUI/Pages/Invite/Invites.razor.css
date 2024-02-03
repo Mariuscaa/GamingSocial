@@ -1,0 +1,141 @@
+﻿body {
+}
+
+
+.container {
+    display: flex;
+    text-align: center;
+    flex-direction: column;
+    align-items: center;
+    width: 80%;
+    padding: 2rem;
+}
+
+.invite-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content:space-between;
+    align-items:center;
+}
+
+
+
+h1 {
+    margin-top:10rem;
+    text-align:center;
+    color:black;
+}
+
+h2 {
+    color: #2b3e2a;
+    margin-top: 2rem;
+}
+
+
+
+.invite-sub-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    align-items:center;
+    padding: 1rem;
+    width: min-content;
+    height: min-content;
+    border: 0.1rem solid #2b3e2a;
+    border-radius: 1rem;
+    margin: 1rem;
+    box-sizing: border-box;
+    box-shadow: 0px 0px 0.6rem rgba(0, 0, 0, 0.1);
+}
+
+.invite-box {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+
+
+}
+
+.invite-item {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    width: min-content;
+    height: min-content;
+    border: 0.1rem solid #2b3e2a;
+    border-radius: 1rem;
+    margin: 1rem;
+    box-sizing: border-box;
+    box-shadow: 0px 0px 0.6rem rgba(0, 0, 0, 0.1);
+}
+
+.invite-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    
+
+}
+
+.invite-from a, .invite-group a {
+    text-decoration: none;
+    color: black;
+    margin: 1rem;
+}
+
+    .invite-from a:hover, .invite-group a:hover {
+        text-decoration: underline;
+        color: #2b3e2a;
+    }
+
+.invite-options {
+    order: 2;
+    align-self: flex-end;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.profile-picture {
+    border-radius: 50%;
+    max-height: 3rem;
+    max-width: 3rem;
+    
+}
+
+.button {
+    margin: 0.5rem 0.25rem auto 0.25rem;
+    background-color: #2b3e2a;
+    border-radius: 1rem;
+    border: none;
+    color: white;
+    text-align: center;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    font-weight: bold;
+    transition: background-color 0.2s ease-in-out;
+    width: 100%;
+}
+
+    .button:hover {
+        background-color: #1a2617;
+        filter: brightness(90%); /* Darken the text on hover */
+        text-decoration: underline White; /* underline on hover */
+    }
+
+    .button:active {
+        color: lightgrey; /* Color change on click */
+    }
+
+@media (max-width: 480px) {
+    .invite-item {
+        flex-direction: column;
+    }
+
+    .profile-picture {
+        max-height: 2rem;
+        max-width: 2rem;
+    }
+}

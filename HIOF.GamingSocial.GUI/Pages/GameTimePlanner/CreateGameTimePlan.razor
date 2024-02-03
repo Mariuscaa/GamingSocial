@@ -1,0 +1,293 @@
+﻿@page "/create-gametimeplan"
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI
+@using HIOF.GamingSocial.GUI.Services
+@using Radzen.Blazor.Rendering
+@inject GameTimePlannerService GameTimePlannerService
+@inject UserService UserService
+@inject GameService GameService
+@inject GroupService GroupService
+@inject NavigationManager NavigationManager
+@inject ILogger<CreateGameTimePlan> Logger
+@inject IToastService ToastService
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+
+<h1>Create GameTime Plan</h1>
+
+<div class="container">
+    
+
+    @if (_noUserHasNoGroups)
+    {
+        <h2>
+            You have no groups!
+        </h2>
+
+        <p>
+            Groups are required for this feature. You can make a group here:
+            <button class="button" @onclick="@(() => NavigationManager.NavigateTo("my-groups"))">My groups</button>
+        </p>
+    }
+    else
+    {
+        <div class="form-container">
+            <EditForm Model="@_postGameTimePlan" OnValidSubmit="OnSubmit">
+
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="form-group">
+                    <label>Name:</label>
+                    <InputText class="form-control"   @bind-Value="_postGameTimePlan.Name" />
+                </div>
+
+
+        <div class="form-group">
+            <label>Description:</label>
+            <InputTextArea class="form-control" @bind-Value="_postGameTimePlan.Description" />
+        </div>
+
+        <div class="form-group">
+            <label>Select Group:</label>
+            <InputSelect class="form-control" @bind-Value="_postGameTimePlan.GroupId">
+                <option value="">Select a group</option>
+                @foreach (var group in _myGroups)
+                {
+                    <option value="@group.GroupId.ToString()">@group.GroupName</option>
+                }
+            </InputSelect>
+        </div>
+
+        <div class="form-group">
+            <label>Game:</label>
+                    <input type="text" @oninput="OnInput" @bind-value="_searchQuery" class="form-control" placeholder="Enter your search query" />
+            <button type="button" style="margin-top:0.5rem;" class="button" @onclick:preventDefault @onclick=GetGameSuggestion>Game Suggestion</button>
+            
+            <InputSelect @bind-Value="_postGameTimePlan.GameId" class="form-control mt-2" size="5">
+                @foreach (var game in _gameList)
+                {
+                    <option value="@game.Id">@game.GameTitle</option>
+                }
+            </InputSelect>
+        </div>
+        @if (_noGamesFound)
+        {
+            <div class="alert alert-danger mt-3" role="alert">
+                No games found with search: @_searchQuery
+            </div>
+        }
+
+        <div class="form-group">
+            <label>Start:</label>
+            <RadzenDatePicker @bind-Value="_postGameTimePlan.StartTime" ShowTime="true" DateFormat="dd/MM/yyyy h:mm:tt" YearRange="2023:2043" InitialViewDate="@DateTime.Today" />
+        </div>
+        <div class="form-group">
+            <label>End:</label>
+            <RadzenDatePicker @bind-Value="_postGameTimePlan.EndTime" ShowTime="true" DateFormat="dd/MM/yyyy h:mm:tt" YearRange="2023:2043" InitialViewDate="@DateTime.Today" />
+        </div>
+
+                <button type="submit" class="button">Create GameTime Plan</button>
+
+            </EditForm>
+
+            <div>
+                @if (_showSuccessMessage)
+                {
+                    <div class="alert alert-success mt-3" role="alert">
+                        GameTime Plan has been created successfully! Check it out here: <a href="/gametimeplan/@_result.Value.GameTimePlanId">@_result.Value.Name</a>
+                    </div>
+                }
+                @if (_showErrorMessage)
+                {
+                    <div class="alert alert-danger mt-3" role="alert">
+                        Failed to create the gametime plan.
+                        @_result.Errors[0]
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private Guid _loggedInProfileGuid;
+    private bool _showSuccessMessage = false;
+    private bool _showErrorMessage = false;
+    private bool _noGamesFound = false;
+    private string _searchQuery;
+    private bool _noUserHasNoGroups;
+
+    private V1GameTimePlan _getGameTimePlan = new();
+    private V3Result<V1GameTimePlan> _result;
+    private List<V3Group> _myGroups = new();
+    private List<V3VideoGameInformation> _gameList = new List<V3VideoGameInformation>();
+    private V1PostGameTimePlan _postGameTimePlan = new V1PostGameTimePlan
+        {
+            StartTime = DateTime.Today,
+            EndTime = DateTime.Today
+        };
+
+    private DateTime _lastKeystroke;
+    private readonly TimeSpan _debouncePeriod = TimeSpan.FromMilliseconds(500);
+
+    private async void OnInput(ChangeEventArgs e)
+    {
+        _lastKeystroke = DateTime.Now;
+        _searchQuery = e.Value.ToString();
+        await Task.Delay(_debouncePeriod);
+        if (DateTime.Now - _lastKeystroke >= _debouncePeriod)
+        {
+            await PerformSearchForGames();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var LoggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            if (Guid.TryParse(LoggedInUser, out _loggedInProfileGuid))
+            {
+                var getGroupsResult = await GroupService.GetGroupsForProfileAsync(_loggedInProfileGuid);
+
+                if (getGroupsResult.Errors.Count != 0)
+                {
+                    if (getGroupsResult.Errors.Contains($"There are no groups for the profile ID {_loggedInProfileGuid} in the database."))
+                    {
+                        _noUserHasNoGroups = true;
+                    }
+
+                    else
+                    {
+                        Logger.LogError("Error during group search: " + string.Join(", ", getGroupsResult.Errors));
+                    }
+                }
+                else
+                {
+                    _noUserHasNoGroups = false;
+
+                    foreach (var groupId in getGroupsResult.Value.GroupIds)
+                    {
+                        var getGroupResult = await GroupService.GetSingleGroupAsync(groupId);
+                        if (getGroupsResult.Errors.Count != 0)
+                        {
+                            if (getGroupResult.Errors.Contains($"No group found with the search `{groupId}`."))
+                            {
+                                Logger.LogWarning($"No group found with search {groupId}. Group exists in GroupMembership, but not in Group.");
+                            }
+
+                            else
+                            {
+                                Logger.LogWarning("Error during search: " + string.Join(", ", getGroupResult.Errors));
+                            }
+                        }
+                        else
+                        {
+                            _myGroups.Add(getGroupResult.Value);
+                        }
+                    }
+                }
+            }
+
+            else
+            {
+                Logger.LogError($"Invalid GUID: {LoggedInUser}.");
+                NavigationManager.NavigateTo("/logout");
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnSubmit()
+    {
+        _showSuccessMessage = false;
+        _showErrorMessage = false;
+
+        _result = await GameTimePlannerService.CreateGameTimePlanAsync(_postGameTimePlan);
+
+        if (!_result.HasErrors)
+        {
+            Logger.LogInformation("GameTimePlan created successfully");
+            _showSuccessMessage = true;
+        }
+
+        else
+        {
+            Logger.LogWarning("Failed to create GameTimePlan. Error: " + _result.Errors[0]);
+            _showErrorMessage = true;
+        }
+    }
+
+    private async Task PerformSearchForGames()
+    {
+        _gameList.Clear();
+        var searchResult = await GameService.Search(_searchQuery);
+
+        if (searchResult.Errors.Count != 0)
+        {
+            if (searchResult.Errors.Contains($"No games found with the search `{_searchQuery}`"))
+            {
+                _noGamesFound = true;
+                Logger.LogWarning($"No games found with search {_searchQuery}");
+            }
+
+            else
+            {
+                Logger.LogWarning("Error during search: " + string.Join(", ", searchResult.Errors));
+
+            }
+        }
+        else
+        {
+            _noGamesFound = false;
+            _gameList = searchResult.Value.ToList();
+        }
+        StateHasChanged();
+    }
+
+    private async Task GetGameSuggestion()
+    {
+        if (_postGameTimePlan.GroupId != 0)
+        {
+            var gameSuggestionResult = await GameTimePlannerService.GetGameSuggestionAsync(_postGameTimePlan.GroupId);
+            if (gameSuggestionResult.Errors.Count != 0)
+            {
+                ToastService.ShowError("Failed to get game suggestion. Try again later.");
+                Logger.LogWarning("Error during search: " + string.Join(", ", gameSuggestionResult.Errors));
+            }
+            else
+            {
+                if (gameSuggestionResult.Value[0] == 0)
+                {
+                    ToastService.ShowWarning("Did not find a common game for the group. Use the search instead.");
+                    Logger.LogWarning($"Found no common game for group {_postGameTimePlan.GroupId}");
+
+                }
+                else
+                {
+                    _gameList.Clear();
+                    foreach (var gameId in gameSuggestionResult.Value)
+                    {
+                        var gameResult = await GameService.GetSingleGameAsync(gameId);
+                        if (gameResult.Errors.Count != 0)
+                        {
+                            Logger.LogWarning("Error during search: " + string.Join(", ", gameResult.Errors));
+                        }
+                        else
+                        {
+                            _gameList.Add(gameResult.Value);
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            ToastService.ShowWarning("You have to select a group to get a game suggestion.");
+
+        }
+        StateHasChanged();
+    }
+}

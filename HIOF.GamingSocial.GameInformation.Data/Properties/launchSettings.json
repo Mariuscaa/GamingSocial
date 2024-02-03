@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "HIOF.GamingSocial.GameInformation.Data": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:51827;http://localhost:51828"
+    }
+  }
+}

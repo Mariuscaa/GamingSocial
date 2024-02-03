@@ -1,0 +1,86 @@
+﻿@using Blazored.Toast
+@using Microsoft.AspNetCore.SignalR.Client;
+@inject HIOF.GamingSocial.GUI.Services.UserService UserService
+@inject HIOF.GamingSocial.GUI.Services.AuthService AuthService
+@inherits LayoutComponentBase
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject IToastService ToastService
+
+<PageTitle>HIOF.GamingSocial.GUI</PageTitle>
+
+<Blazored.Toast.Container Position="ToastPosition.TopRight" />
+<BlazoredToasts />
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <div style="display: flex; align-items: center;">
+                @if (AuthService.IsLoggedIn)
+                {
+                    <a href="/mypage">
+
+                        @if (!string.IsNullOrEmpty(_photoUrl))
+                        {
+                            <img src="@_photoUrl" alt="Profile Picture" style="height: 50px; width: 50px; border-radius: 50%; margin-right: 10px;" class="img-fluid profile-picture" />
+                        }
+                        else
+                        {
+                        <img src="/Images/profile.png" alt="Backup Profile Picture" style="height: 50px; width: 50px; border-radius: 50%; margin-right: 10px;" class="img-fluid profile-picture" />
+                        }
+
+
+                    </a>
+                    <a class="LoggedInUser" href="/mypage">@_loggedInUser</a>
+                }
+            </div>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    private string _loggedInUser { get; set; }
+    private string _photoUrl { get; set; }
+    private bool _firstRender = true;
+    private Guid _loggedInProfileGuid;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+
+        if (this._firstRender)
+        {
+            RefreshLogin();
+
+            this._firstRender = false;
+            StateHasChanged();
+        }
+    }
+
+    private async void RefreshLogin()
+    {
+        string loggedInUserGuid = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+        if (!string.IsNullOrEmpty(loggedInUserGuid) && Guid.TryParse(loggedInUserGuid, out _loggedInProfileGuid))
+        {
+            var result = await UserService.CheckUserAsync(_loggedInProfileGuid);
+            if (result.Value != null)
+            {
+                _loggedInUser = result.Value.UserName;
+                _photoUrl = result.Value.PhotoUrl;
+            }
+        }
+        StateHasChanged();
+    }
+    protected override void OnInitialized()
+    {
+        AuthService.OnChange += RefreshLogin;
+    }
+}
+
+
+

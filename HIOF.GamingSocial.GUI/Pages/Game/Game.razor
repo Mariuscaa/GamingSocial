@@ -1,0 +1,143 @@
+﻿@page "/game/{gameId}"
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Services
+@inject PublicGameService PublicGameService
+@inject GameService GameService
+@inject NavigationManager NavigationManager
+@inject ILogger<Game> Logger
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+
+<div class="container">
+    @if (_game == null)
+    {
+        <p class="page-status"><em>@_pageStatus</em></p>
+    }
+    else
+    {
+        <div class="header-container">
+            <h1>@_game.Title</h1>
+        </div>
+
+        <div class="action-container">
+            @if (!_gameInCollection)
+            {
+                <button class="button" @onclick="AddGameToCollection">Add to collection</button>
+            }
+            else
+            {
+                <button class="button" @onclick="RemoveGameFromCollection">Remove from collection</button>
+            }
+        </div>
+
+        <div class="image-container">
+            <img src=@_game.HeaderImageUrl alt="Image for the game.">
+        </div>
+
+        <div class="description-container">
+            <p>@_game.ShortDescription</p>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string GameId { get; set; }
+
+    private string _pageStatus { get; set; } = "Loading...";
+
+    private int _gameIdAsInt;
+
+    private V2SteamGameDetails? _game = null;
+
+    private Guid _loggedInProfileGuid;
+
+    private bool _gameInCollection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        int.TryParse(GameId, out _gameIdAsInt);
+        if (_gameIdAsInt == 0)
+        {
+            _pageStatus = $"{GameId} is not a valid GameId.";
+            Logger.LogWarning($"{GameId} is not a valid GameId.");
+            return;
+        }
+
+        else
+        {
+            var publicGameResult = await PublicGameService.GetGameAsync(_gameIdAsInt);
+            if (publicGameResult.Errors.Count != 0)
+            {
+                _pageStatus = "Error getting game: " + string.Join(", ", publicGameResult.Errors);
+                Logger.LogWarning("Error getting game: " + string.Join(", ", publicGameResult.Errors));
+                return;
+            }
+            else
+            {
+                _game = publicGameResult.Value;
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var loggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            if (Guid.TryParse(loggedInUser, out _loggedInProfileGuid))
+            {
+                var gameCollectionCheckResult = await GameService.CheckIfGameIsInCollection(_loggedInProfileGuid, _gameIdAsInt);
+                if (gameCollectionCheckResult.Errors.Count != 0)
+                {
+                    _pageStatus = "Error checking collection: " + string.Join(", ", gameCollectionCheckResult.Errors);
+                    Logger.LogWarning("Error checking collection: " + string.Join(", ", gameCollectionCheckResult.Errors));
+                    return;
+                }
+                else
+                {
+                    _gameInCollection = gameCollectionCheckResult.Value;
+                }
+            }
+            else
+            {
+                Logger.LogError("Invalid GUID.");
+                NavigationManager.NavigateTo("/logout");
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task AddGameToCollection()
+    {
+        var gameAddition = await GameService.AddGameToCollection(_loggedInProfileGuid, _gameIdAsInt);
+
+        if (gameAddition.Errors.Count != 0)
+        {
+            Logger.LogWarning("Error during addition: " + string.Join(", ", gameAddition.Errors));
+            return;
+        }
+        else
+        {
+            _gameInCollection = true;
+        }
+    }
+
+    private async Task RemoveGameFromCollection()
+    {
+        var gameRemoval = await GameService.RemoveGameFromCollection(_loggedInProfileGuid, _gameIdAsInt);
+
+        if (gameRemoval.Errors.Count != 0)
+        {
+            // PageStatus = "Error during deletion: " + string.Join(", ", gameRemoval.Errors);
+            Logger.LogWarning("Error during deletion: " + string.Join(", ", gameRemoval.Errors));
+            return;
+        }
+        else
+        {
+            _gameInCollection = false;
+        }
+    }
+
+}

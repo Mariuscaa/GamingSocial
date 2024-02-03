@@ -1,0 +1,99 @@
+﻿@page "/login"
+@inject HIOF.GamingSocial.GUI.Services.UserService userservice
+@inject NavigationManager Navigation
+@using HIOF.GamingSocial.GUI.Model.ProfileInformation
+@using HIOF.GamingSocial.GUI.Model
+@inject ILogger<Login> Logger
+@inject HIOF.GamingSocial.GUI.Services.AuthService AuthService
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@using Microsoft.AspNetCore.SignalR.Client;
+
+<div class="login-container">
+    <div class="login-box">
+        <h1>Login</h1>
+        <EditForm Model="@_profile" OnValidSubmit="OnSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <InputText id="username" class="input-control" @bind-Value="_profile.UserName" />
+            </div>
+            <button type="submit" class="button">Log in</button>
+        </EditForm>
+    </div>
+</div>
+
+
+@if (_showSuccessMessage)
+{
+    <div class="alert alert-success mt-3" role="alert">
+    </div>
+    NavigateToPage();
+    _showSuccessMessage = false;
+}
+
+@if (_showErrorMessage)
+{
+    <div class="alert alert-danger mt-3" role="alert">
+        Failed to create the profile for the following reason:
+        @_result.Errors[0]
+    </div>
+}
+
+@code {
+    private V3Profile _profile = new();
+    private V3Result<V3Profile> _result;
+    private bool _showSuccessMessage = false;
+    private bool _showErrorMessage = false;
+
+    private void NavigateToPage()
+    {
+        Navigation.NavigateTo($"/mypage");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var isLoggedIn = await LocalStorage.GetItemAsync<string>("IsLoggedIn");
+            if (isLoggedIn == "true")
+            {
+                Navigation.NavigateTo($"/");
+            }
+        }
+
+    }
+
+
+    private async Task OnSubmit()
+    {
+        _showSuccessMessage = false;
+        _showErrorMessage = false;
+
+        _result = await userservice.LoginAsync(_profile.UserName);
+        if (!_result.HasErrors)
+        {
+            string profileGuidString = _result.Value.ProfileGuid.ToString();
+            Guid loggedInProfileGuid = Guid.Parse(profileGuidString);
+            var _result2 = await userservice.CheckUserAsync(loggedInProfileGuid);
+
+            await StoreData("LoggedInUser", _result2.Value.ProfileGuid.ToString());
+            var value = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+
+            await AuthService.Login();
+
+            _showSuccessMessage = true;
+        }
+        else
+        {
+            _showErrorMessage = true;
+        }
+    }
+
+
+    private async Task StoreData(string key, string value)
+    {
+        await LocalStorage.SetItemAsync(key, value);
+    }
+
+}

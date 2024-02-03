@@ -1,0 +1,95 @@
+﻿@page "/createprofile"
+@using HIOF.GamingSocial.GUI.Model.ProfileInformation
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI
+@using HIOF.GamingSocial.GUI.Services
+@inject UserService UserService
+@inject ILogger<CreateProfile> Logger
+
+
+<div class="profile-container">
+    <div class="profile-box">
+        <div class="header-container">
+            <h1>Create Profile</h1>
+        </div>
+
+        <EditForm Model="@_postProfile" OnValidSubmit="OnSubmit" class="profile-content">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="text-content">
+                <div class="form-group">
+                    <label><strong>Username:</strong></label>
+                    <InputText class="input-control" @bind-Value="_postProfile.UserName" />
+                </div>
+                <div class="form-group">
+                    <label><strong>Name:</strong></label>
+                    <InputText class="input-control" @bind-Value="_postProfile.Name" />
+                </div>
+                <div class="form-group">
+                    <label><strong>Bio:</strong></label>
+                    <InputTextArea class="input-control" @bind-Value="_postProfile.Bio" />
+                </div>
+                <div class="form-group">
+                    <label><strong>Country:</strong></label>
+                    <InputText class="input-control" @bind-Value="_postProfile.Country" />
+                </div>
+                <div class="form-group">
+                    <label><strong>Age:</strong></label>
+                    <InputNumber class="input-control" @bind-Value="_postProfile.Age" />
+                </div>
+                <div class="form-group">
+                    <label><strong>Photo URL (optional):</strong></label>
+                    <InputText class="input-control" @bind-Value="_postProfile.PhotoUrl" />
+                </div>
+                <button type="submit" class="button">Create Profile</button>
+            </div>
+        </EditForm> 
+
+    @if (_showSuccessMessage)
+    {
+        <div class="alert alert-success mt-3" role="alert">
+            Profile has been created successfully!
+        </div>
+        _showSuccessMessage = false;
+    }
+
+    @if (_showErrorMessage)
+    {
+        <div class="alert alert-danger mt-3" role="alert">
+            Failed to create the profile for the following reason:
+            @_result.Errors[0]
+        </div>
+    }
+</div>
+
+</div>
+
+
+@code {
+    private V3PostProfile _postProfile = new();
+    private V3Result<V3PostProfile> _result;
+    private bool _showSuccessMessage = false;
+    private bool _showErrorMessage = false;
+
+    private async Task OnSubmit()
+    {
+        _showSuccessMessage = false;
+        _showErrorMessage = false;
+
+
+        _result = await UserService.CreateProfileAsync(_postProfile);
+
+        if (!_result.HasErrors)
+        {
+            _showErrorMessage = false;
+            _showSuccessMessage = true;
+        }
+        else
+        {
+            Logger.LogWarning("Failed to create profile for the following reason: " + _result.Errors[0]);
+            _showSuccessMessage = false;
+            _showErrorMessage = true;
+        }
+    }
+}

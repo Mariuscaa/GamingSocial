@@ -1,0 +1,163 @@
+﻿body {
+ 
+}
+
+.container {
+    display: flex;
+    text-align: center;
+    flex-direction: column;
+    align-items: center;
+    max-width: 45rem;
+
+    padding: 2rem;
+    border: 1px solid #ccc;
+    border-radius: 1rem;
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0px 0px 0.6rem rgba(0, 0, 0, 0.1);
+}
+
+.header-container {
+    text-align: center;
+}
+
+.row{
+    
+}
+
+h1 {
+    color: #2b3e2a;
+    margin-top: 3rem;
+    text-align: center;
+    font-size: 2rem;
+}
+
+h2 {
+    font-size: 2rem;
+    margin-top: 2rem;
+    color: #2b3e2a;
+}
+
+h3 {
+    font-size: 1.6rem;
+    margin-top: 2rem;
+    color: #2b3e2a;
+}
+
+h5 {
+    margin-bottom: 1rem;
+    font-size: 1.4rem;
+}
+
+.list-group {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+
+}
+
+.form-control{
+    margin-bottom: 1rem;
+}
+
+.list-group-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+}
+
+.profile-picture-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 2rem;
+   
+}
+
+.profile-picture {
+    border-radius: 50%;
+    max-height: 15rem;
+    max-width: 15rem;
+    margin-bottom: 1rem;
+}
+
+.table {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+    .table th {
+        font-weight: bold;
+    }
+
+    .table td,
+    .table th {
+        padding: 0.5rem;
+        border: 1px solid #ccc;
+    }
+
+
+
+.placeholder-checkbox {
+    color: gray;
+}
+
+.list-group-item {
+    background-color: #f5f5f5;
+    color: #333;
+    border: 1px solid #ddd;
+    padding: 10px 15px;
+    margin-bottom: -1px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+}
+
+    .list-group-item:hover {
+        background-color: #e8e8e8;
+    }
+
+
+a{
+    color:black;
+    text-decoration:none;
+}
+
+.button {
+    background-color: #2b3e2a;
+    border-radius: 1rem;
+    border: none;
+    color: white;
+    text-align: center;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    font-weight: bold;
+    transition: background-color 0.2s ease-in-out;
+  
+    
+}
+
+
+
+    .button:hover {
+        background-color: #1a2617;
+        filter: brightness(90%);
+        text-decoration: underline white;
+    }
+
+    .button:active {
+        color: lightgrey;
+    }
+
+.placeholder-checkbox {
+    margin-left: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .row {
+        flex-direction: column;
+    }
+
+    .col-md-6 {
+        width: 100%;
+    }
+}

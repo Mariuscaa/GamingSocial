@@ -1,0 +1,186 @@
+﻿@page "/invites"
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Model.ProfileInformation;
+@using HIOF.GamingSocial.GUI.Services
+@inject UserService UserService
+@inject GroupService GroupService
+@inject InviteService InviteService
+@inject NavigationManager NavigationManager
+@inject ILogger<Invites> Logger
+@inject IToastService ToastService
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+
+<h1>Your Invites</h1>
+
+<div class="container">
+
+
+
+
+
+
+    <div class="invite-container">
+
+
+        @if (_myInvites == null)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else
+        {
+            <div class="invite-sub-container">
+                <h2>Friend invites</h2>
+                <div class="invite-box">
+                    @foreach (var invite in _myInvites)
+                    {
+                        if (invite.Invite.InviteType == "Friend")
+                        {
+                            <div class="invite-item">
+                                <div class="profile-image">
+                                    <img src="@(invite.SenderProfile?.PhotoUrl ?? "/Images/profile.png")" alt="@invite.SenderProfile.UserName's Picture" class="img-fluid profile-picture" />
+                                </div>
+                                <div class="invite-content">
+                                    <div class="invite-from">
+                                        <a href="@($"profile/{invite.Invite.SenderGuid}")">@invite.SenderProfile.UserName</a>
+                                    </div>
+                                    <div class="invite-message">
+                                        @invite.Invite.Message
+                                    </div>
+                                    <div class="invite-options">
+                                        <button class="button" @onclick="@(async () => await AcceptInvite(invite.Invite))">Accept</button>
+                                        <button class="button" @onclick="@(async () => await DeclineInvite(invite.Invite))">Decline</button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="invite-sub-container">
+                <h2>Group Invites</h2>
+
+                <div class="invite-box">
+                    @foreach (var invite in _myInvites)
+                    {
+                        @if (invite.Invite.InviteType == "Group")
+                        {
+                            <div class="invite-item">
+                                <div class="profile-image">
+                                    <img src="@(invite.Group?.PhotoUrl ?? "/Images/profile.png")" alt="@invite.Group.GroupName's Picture" class="img-fluid profile-picture" />
+                                </div>
+                                <div class="invite-content">
+                                    <div class="invite-from">
+                                        <a href="@($"profile/{invite.Invite.SenderGuid}")">@invite.SenderProfile.UserName</a>
+                                    </div>
+                                    <div class="invite-group">
+                                        <a href="@($"group/{invite.Group.GroupId}")">@invite.Group.GroupName</a>
+                                    </div>
+                                    <div class="invite-message">
+                                        @invite.Invite.Message
+                                    </div>
+                                    <div class="invite-options">
+                                        <button class="button" @onclick="@(async () => await AcceptInvite(invite.Invite))">Accept</button>
+                                        <button class="button" @onclick="@(async () => await DeclineInvite(invite.Invite))">Decline</button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+
+
+@code {
+    private List<InviteWithProfileAndGroup> _myInvites = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var LoggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            if (Guid.TryParse(LoggedInUser, out Guid loggedInProfileGuid))
+            {
+                var getInvitesResult = await InviteService.GetInvitesForProfileAsync(loggedInProfileGuid);
+                if (getInvitesResult.Errors.Count != 0)
+                {
+                    Logger.LogWarning("Error during search: " + string.Join(", ", getInvitesResult.Errors));
+                }
+                else
+                {
+                    foreach (var invite in getInvitesResult.Value)
+                    {
+                        var tempProfile = new V3Profile();
+                        var tempGroup = new V3Group();
+                        var getSenderProfile = await UserService.CheckUserAsync(invite.SenderGuid);
+                        if (getSenderProfile.Errors.Count != 0)
+                        {
+                            Logger.LogWarning("Error during search: " + string.Join(", ", getSenderProfile.Errors));
+                        }
+                        else
+                        {
+                            tempProfile = getSenderProfile.Value;
+                        }
+                        if (invite.InviteType == "Group")
+                        {
+                            var getGroup = await GroupService.GetSingleGroupAsync((int)invite.RelatedId);
+                            if (getGroup.Errors.Count != 0)
+                            {
+                                Logger.LogWarning("Error during group lookup: " + string.Join(", ", getGroup.Errors));
+                            }
+                            else
+                            {
+                                tempGroup = getGroup.Value;
+                            }
+                        }
+                        _myInvites.Add(new InviteWithProfileAndGroup()
+                            {
+                                Invite = invite,
+                                SenderProfile = tempProfile,
+                                Group = tempGroup
+                            });
+                    }
+                }
+            }
+            else
+            {
+                Logger.LogWarning($"Could not parse {LoggedInUser} to a Guid.");
+                NavigationManager.NavigateTo("/logout");
+            }
+            StateHasChanged();
+        }
+    }
+    private async Task AcceptInvite(V3Invite invite)
+    {
+        var acceptResult = await InviteService.AcceptInviteAsync(invite);
+        if (acceptResult.Errors.Count != 0)
+        {
+            Logger.LogWarning("Error during accept: " + string.Join(", ", acceptResult.Errors));
+        }
+        else
+        {
+            _myInvites.Remove(_myInvites.Find(x => x.Invite.InviteId == invite.InviteId));
+            ToastService.ShowSuccess("Invite was accepted successfully.");
+        }
+    }
+
+    private async Task DeclineInvite(V3Invite invite)
+    {
+        var declineResult = await InviteService.DeleteInviteAsync(invite.InviteId);
+        if (declineResult.Errors.Count != 0)
+        {
+            Logger.LogWarning("Error during accept: " + string.Join(", ", declineResult.Errors));
+        }
+        else
+        {
+            _myInvites.Remove(_myInvites.Find(x => x.Invite.InviteId == invite.InviteId));
+            ToastService.ShowInfo("Invite was declined successfully.");
+        }
+    }
+
+}

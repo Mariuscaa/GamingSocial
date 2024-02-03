@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+import "Protos/shared_messages.proto";
+
+option csharp_namespace = "HIOF.GamingSocial.PublicGameInformation.Protos";
+
+package publicsteamgames;
+
+message Game {
+    int32 appid = 1;
+    string name = 2;
+    int64 last_modified = 3;
+}
+
+message AllSteamGamesResponse {
+    repeated Game games = 1;
+}
+
+service PublicSteamGamesService {
+  rpc GetPublicGames(sharedprotos.EmptyRequest) returns (sharedprotos.ProtoResult);
+}

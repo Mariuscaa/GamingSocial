@@ -1,0 +1,113 @@
+﻿body {
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 80%;
+    max-width:40rem;
+    
+    padding: 2rem;
+    border: 1px solid #ccc;
+    margin-top: 10rem;
+    border-radius: 1rem;
+    box-shadow: 0px 0px 0.6rem rgba(0, 0, 0, 0.1);
+    text-align:center;
+    
+}
+
+
+
+
+
+h1 {
+    margin-bottom: 2rem;
+    color:#2b3e2a;
+}
+
+.no-games-container {
+    font-weight:bold;
+    border-collapse: collapse;
+    padding: 2rem;
+    border: 1px solid #ccc;
+    margin-top: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0px 0px 0.6rem rgba(0, 0, 0, 0.1);
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    padding: 2rem;
+    border: 1px solid #ccc;
+    margin-top: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0px 0px 0.6rem rgba(0, 0, 0, 0.1);
+}
+
+    .table thead th {
+        text-align: center;
+        font-size: 1.6rem;
+        padding: 1rem;
+        border-bottom: 0.1rem solid #2b3e2a;
+    }
+
+    .table tbody tr td {
+        padding: 1rem;
+        border-bottom: 0.05rem solid #2b3e2a;
+    }
+
+        .table tbody tr td a {
+            text-decoration: none;
+            color: black;
+        }
+
+            .table tbody tr :hover {
+                text-decoration: underline;
+                background-color: #2b3e2a;
+    
+                cursor: pointer;
+            }
+
+                .table tbody tr:hover td,
+                .table tbody tr:hover td a {
+                    color: white;
+                }
+            
+
+.button-container {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2rem;
+    
+}
+
+.button {
+    background-color: #2b3e2a;
+    border-radius: 1rem;
+    color: white;
+    text-align: center;
+    font-size: 1rem;
+    
+    padding: 0.5rem;
+    font-weight: bold;
+    transition: background-color 0.2s ease-in-out;
+    width: 45%;
+}
+
+    .button a {
+        color: white;
+        text-decoration: none;
+    }
+
+    .button:hover {
+        background-color: #1a2617;
+        text-decoration: underline;
+        color:white;
+    }
+
+.loading-container {
+    display: flex;
+    justify-content: center;
+}

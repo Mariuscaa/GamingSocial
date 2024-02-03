@@ -1,0 +1,191 @@
+﻿/* ...Existing Styles... */
+
+.layout {
+    display: flex;
+    align-items: center; /* vertically centers items */
+    flex-wrap: wrap; /* NEW: allows items to wrap onto new lines */
+    justify-content: space-between;
+    padding: 2em;
+    gap: 2em;
+}
+
+
+.chat {
+    flex: 3;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    border: 0.1em solid #2b3e2a;
+    border-radius: 1rem;
+    padding: 1em;
+    box-shadow: 0px 0px 0.6rem rgba(0, 0, 0, 0.1);
+}
+
+.chat-header, .friends-header {
+    text-align: center;
+    margin-bottom: 1em;
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+.chat-header, .friends-header {
+    text-align: center;
+    margin-bottom: 1em;
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+.chat-box {
+    display: flex;
+    flex-direction: column-reverse;
+    flex-grow: 1;
+    overflow-y: auto;
+    margin-bottom: 1em;
+    overflow-y: scroll;
+    height: 25rem;
+
+}
+
+
+
+
+
+.input-area {
+    display: flex;  
+    justify-content: space-between;
+    align-items: center; /* align the button and input vertically */
+}
+
+.input-area input {
+    flex-grow: 1; /* makes input take all available space */
+    margin-right: 0.5rem; /* add space between input and button */
+    margin-bottom: 1rem;
+
+}
+
+.button {
+    flex-shrink: 0;
+    background-color: #2b3e2a;
+    color: white;
+    border: none;
+    padding: 0.5em 1em;
+    cursor: pointer;
+    border-radius: 1rem;
+}
+
+.button:hover {
+    background-color: #1a2617;
+    filter: brightness(90%); /* Darken the text on hover */
+    text-decoration: underline White; /* underline  on hover */
+
+}
+
+
+.button:active {
+    color: lightgrey; /* Color change on click */
+
+}
+
+.date-divider {
+    text-align: center;
+    width: 100%;
+    color: #999999; 
+    padding: 10px 0; 
+}
+
+
+
+.my-message {
+    align-self: flex-end;
+    background-color: #2b3e2a;
+    color: white;
+    padding: 0.5em;
+    border-radius: 0.5em;
+    margin-bottom: 0.5em;
+    max-width: 90%;
+    word-wrap: break-word;
+}
+
+.other-message {
+    align-self: flex-start;
+    background-color: #ddd;
+    padding: 0.5em;
+    border-radius: 0.5em;
+    margin-bottom: 0.5em;
+    max-width: 90%;
+    word-wrap: break-word;
+}
+
+
+.friends {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    border: 0.1em solid #2b3e2a;
+    border-radius: 1rem;
+    padding: 1em;
+    box-shadow: 0px 0px 0.6rem rgba(0, 0, 0, 0.1);
+}
+
+.contacts {
+    margin-bottom: 2rem;
+    text-align:center;
+    font-weight:bold;
+}
+
+.form-group{
+    font-weight:bold;
+}
+
+.form-control{
+    flex: 1;    
+   
+    
+}
+
+.friend {
+    padding: 0.5em;
+    border: 0.1em solid #2b3e2a;
+    border-radius: 0.5em;
+    margin-bottom: 0.5em;
+    overflow-y: auto; /* Scroll bar will appear only when it's needed */
+    /*transition: background-color 0.3s ease;*/
+}
+
+.friend:hover {
+    background-color: #2b3e2a;
+    color: white;
+    cursor: pointer;
+
+}
+
+.alert {
+    color: red;
+    padding: 1em;
+    margin-top: 1em;
+    border: 0.1em solid red;
+    border-radius: 0.5em;
+}
+
+@media screen and (max-width: 600px) {
+    .layout {
+        display: block;
+        gap: 1em; /* NEW: add space between chat and friends on small screens */
+    }
+
+    .chat-box {
+        margin-bottom: 1em; /* NEW: add space below chat box on small screens */
+    }
+
+    .input-area {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5em;
+    }
+    
+    .input-area input, .button {
+        width: 100%; /* NEW: make input and button take full width on small screens */
+
+    }
+}

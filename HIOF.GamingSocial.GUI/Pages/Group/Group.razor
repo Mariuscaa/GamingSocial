@@ -1,0 +1,460 @@
+﻿@page "/group/{groupId}"
+@using HIOF.GamingSocial.GUI.Model
+@using HIOF.GamingSocial.GUI.Model.ProfileInformation;
+@using HIOF.GamingSocial.GUI.Services
+@inject UserService UserService
+@inject GroupService GroupService
+@inject InviteService InviteService
+@inject NavigationManager NavigationManager
+@inject ILogger<Group> Logger
+@inject IToastService ToastService
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+ 
+<div class="container">
+
+    @if (_group == null)
+    {
+        <p><em>@_pageStatus</em></p>
+    }
+    else
+    {
+        <div class="header-container">
+            @if (!_isEditMode)
+            {
+                <h1>@_group.GroupName</h1>
+
+                <p>@_group.Description</p>
+                @if (!string.IsNullOrEmpty(_group?.PhotoUrl))
+                {
+                    <img src="@_group?.PhotoUrl" alt="@_group?.GroupName's Picture" class="img-fluid profile-picture" />
+                }
+                else
+                {
+                    <img src="/Images/profile.png" alt="Backup Profile Picture" class="img-fluid profile-picture" />
+                }
+                <p> <strong>Privacy state:</strong> @(_group.IsPrivate ? "Private" : "Public")</p>
+                <p> <strong>Visibility:</strong> @(_group.IsHidden ? "Hidden" : "Visible")</p>
+
+                <h3>Group members</h3>
+
+                @if (!_group.IsPrivate || _myGroupMembership.Members.Count > 0)
+                {
+                    @if (_allGroupMemberships.Members != null && _allGroupMemberships.Members.Count > 0)
+                    {
+                        <div class="list-group">
+                            @foreach (var profileWithMemberType in _allMemberProfiles)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>
+                                        <a href="@($"profile/{profileWithMemberType.Profile.ProfileGuid}")"> <strong>@profileWithMemberType.Profile.UserName</strong></a>
+                                        <em>@((profileWithMemberType.Profile.ProfileGuid == _loggedInProfileGuid) ? "(you)" : "")</em>
+                                    </span>
+                                    <span><strong>@profileWithMemberType.MemberType</strong></span>
+                                    @if (_myGroupMembership.Members.Count > 0)
+                                    {
+                                        @if (_myGroupMembership.Members[0].MemberType == "Owner")
+                                        {
+                                            if (profileWithMemberType.MemberType == "Member")
+                                            {
+                                                <button class="button" @onclick="@(async () => await ChangeMemberType(profileWithMemberType.Profile.ProfileGuid, "Admin"))">Make Admin</button>
+                                            }
+                                            else if (profileWithMemberType.MemberType == "Admin")
+                                            {
+                                                <button class="button" @onclick="@(async () => await ChangeMemberType(profileWithMemberType.Profile.ProfileGuid, "Member"))">Revoke Admin</button>
+                                            }
+                                            if (!(profileWithMemberType.MemberType == "Owner"))
+                                            {
+                                                <button class="button" @onclick="@(async () => await RemoveFromGroup(profileWithMemberType.Profile.ProfileGuid))">Remove</button>
+                                            }
+                                        }
+
+                                        @if (_myGroupMembership.Members[0].MemberType == "Admin")
+                                        {
+                                            if (profileWithMemberType.MemberType == "Member")
+                                            {
+                                                <button class="button" @onclick="@(async () => await RemoveFromGroup(profileWithMemberType.Profile.ProfileGuid))">Remove</button>
+                                            }
+                                        }
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p>No members in the group.</p>
+                    }
+                }
+                else
+                {
+                    <p>Member list is not available because group is private.</p>
+                }
+
+                @if (_myGroupMembership.Members.Count == 0)
+                {
+                    <p><em>You are not a member of this group.</em></p>
+                }
+                else
+                {
+                    <p>You are in this group. Your rank: @(_myGroupMembership.Members[0].MemberType).</p>
+
+                    @if (_myGroupMembership.Members[0].MemberType == "Owner" || _myGroupMembership.Members[0].MemberType == "Admin")
+                    {
+                        <h2>Search for members to add:</h2>
+                        <form @onsubmit="PerformSearchForProfiles">
+                            <div class="form-group">
+                                <input type="text" class="form-control" @bind="_searchQuery" placeholder="Enter your search query" />
+                            </div>
+                            <button type="submit" class="button">Search</button>
+                        </form>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>UserName</th>
+                                    <th>Invite</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var profile in _searchProfileList)
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="@($"profile/{profile.ProfileGuid}")">@profile.UserName</a>
+                                        </td>
+                                        <td>
+                                            <button class="button" @onclick="@(async () => await InviteToGroup(profile.ProfileGuid))">
+                                                Invite
+                                            </button>
+                                        </td>
+                                    </tr>
+                                
+                                }
+                            </tbody>
+                        </table>
+                    }                  
+
+
+                    if (_myGroupMembership.Members[0].MemberType == "Owner")
+                    {
+                        <button class="button" @onclick=DeleteGroup>Delete group</button>
+                        <button class="button" @onclick=ToggleEditMode>Edit group</button>
+                    }
+                    else
+                    {
+                        <button class="button" @onclick="@(async () => await RemoveFromGroup(_loggedInProfileGuid))">
+                            Leave group
+                        </button>
+                    }
+                }
+            }
+            else
+            {
+                <div class="row">
+                    <div class="col-md-6">
+                        <button @onclick="SaveGroup" class="button mb-3">Save</button>
+                        <button @onclick="ToggleEditMode" class="button mb-3">Cancel</button>
+
+                        <div class="mb-3">
+                            <label>Group name:</label>
+                            <InputText @bind-Value="_editGroup.GroupName" placeholder="@_group?.GroupName" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Description:</label>
+                            <InputText @bind-Value="_editGroup.Description" placeholder="@_group?.Description" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Is private:</label>
+                            <InputCheckbox @bind-Value="_editGroup.IsPrivate" />
+                            <span class="placeholder-checkbox">(@(_group.IsPrivate ? "Currently private" : "Currently not private"))</span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Is hidden:</label>
+                            <InputCheckbox @bind-Value="_editGroup.IsHidden" />
+                            <span class="placeholder-checkbox">(@(_group.IsHidden ? "Currently hidden" : "Currently not hidden"))</span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Profile Picture:</label>
+                            <InputText @bind-Value="_editGroup.PhotoUrl" placeholder="@_group?.PhotoUrl" />
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        @if (!string.IsNullOrEmpty(_group?.PhotoUrl))
+                        {
+                            <img src="@_group?.PhotoUrl" alt="@_group?.GroupName's Picture" class="img-fluid profile-picture" />
+                        }
+                        else
+                        {
+                            <img src="/Images/profile.png" alt="Backup Profile Picture" class="img-fluid profile-picture" />
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string GroupId { get; set; }
+
+    private string _pageStatus { get; set; } = "Loading...";
+
+    private int _groupIdAsInt;
+
+    private V3Group? _group = null;
+
+    private Guid _loggedInProfileGuid;
+
+    private bool _isEditMode = false;
+
+    private void ToggleEditMode()
+    {
+        _isEditMode = !_isEditMode;
+    }
+
+    private V3GroupMemberships _myGroupMembership = new()
+        {
+            Members = new List<V3Member>()
+        };
+
+    private V3GroupMemberships _allGroupMemberships = new()
+        {
+            Members = new List<V3Member>()
+        };
+    private List<ProfileWithMemberType> _allMemberProfiles = new();
+
+    private string _searchQuery;
+
+    private List<V3Profile> _searchProfileList = new();
+
+    private V3PatchGroup _editGroup = new();
+
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        int.TryParse(GroupId, out _groupIdAsInt);
+        if (_groupIdAsInt == 0)
+        {
+            _pageStatus = $"{GroupId} is not a valid GroupId.";
+            Logger.LogWarning($"{GroupId} is not a valid GroupId.");
+            return;
+        }
+
+        else
+        {
+            var groupResult = await GroupService.GetSingleGroupAsync(_groupIdAsInt);
+            if (groupResult.Errors.Count != 0)
+            {
+                _pageStatus = "Error getting group: " + string.Join(", ", groupResult.Errors);
+                Logger.LogWarning("Error getting group: " + string.Join(", ", groupResult.Errors));
+                return;
+            }
+            else
+            {
+                _group = groupResult.Value;
+            }
+        }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var LoggedInUser = await LocalStorage.GetItemAsync<string>("LoggedInUser");
+            if (Guid.TryParse(LoggedInUser, out _loggedInProfileGuid))
+            {
+                var groupMembershipResult = await GroupService.GetGroupMembership(_loggedInProfileGuid, _groupIdAsInt);
+                if (groupMembershipResult.Errors.Count != 0)
+                {
+                    Logger.LogWarning("Error getting group membership status: " + string.Join(", ", groupMembershipResult.Errors));
+                }
+                else
+                {
+                    _myGroupMembership = groupMembershipResult.Value;
+                }
+
+                var allGroupMembershipsResult = await GroupService.GetAllGroupMembersAsync(_groupIdAsInt);
+
+                if (allGroupMembershipsResult.Errors.Count != 0)
+                {
+                    Logger.LogWarning("Error getting group members: " + string.Join(", ", allGroupMembershipsResult.Errors));
+                }
+                else
+                {
+                    _allGroupMemberships = allGroupMembershipsResult.Value;
+                    foreach (var member in _allGroupMemberships.Members)
+                    {
+                        var getProfileResult = await UserService.CheckUserAsync(member.ProfileGuid);
+                        if (getProfileResult.Errors.Count != 0)
+                        {
+                            _pageStatus = $"Error getting profile in group {_allGroupMemberships.GroupId}: " + string.Join(", ", getProfileResult.Errors);
+                            Logger.LogWarning($"Error getting profile in group {_allGroupMemberships.GroupId}: " + string.Join(", ", getProfileResult.Errors));
+                        }
+                        else
+                        {
+                            var profileWithMemberType = new ProfileWithMemberType()
+                                {
+                                    Profile = getProfileResult.Value,
+                                    MemberType = member.MemberType
+                                };
+                            _allMemberProfiles.Add(profileWithMemberType);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                Logger.LogError($"Invalid GUID: {_loggedInProfileGuid}.");
+                NavigationManager.NavigateTo("/logout");
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task PerformSearchForProfiles()
+    {
+        _searchProfileList.Clear();
+        var searchResult = await UserService.GetProfilesAsync(_searchQuery);
+
+        if (searchResult.Errors.Count != 0)
+        {
+            if (searchResult.Errors.Contains($"No profiles found with the search `{_searchQuery}`"))
+            {
+                Logger.LogWarning($"No profiles found with search {_searchQuery}");
+            }
+
+            else
+            {
+                Logger.LogWarning("Error during search: " + string.Join(", ", searchResult.Errors));
+
+            }
+        }
+        else
+        {
+            // Remove profiles that are already in the group before adding to list.
+            foreach (var profile in searchResult.Value)
+            {
+                var profileInGroup = _allMemberProfiles.FirstOrDefault(p => p.Profile.ProfileGuid == profile.ProfileGuid);
+                if (profileInGroup == null)
+                {
+                    _searchProfileList.Add(profile);
+                }
+            }
+        }
+        StateHasChanged();
+    }
+
+    private async Task InviteToGroup(Guid receiverGuid)
+    {
+        var postInvite = new V3PostInvite()
+            {
+                InviteType = "Group",
+                RelatedId = _groupIdAsInt,
+                ReceiverGuid = receiverGuid,
+                SenderGuid = _loggedInProfileGuid
+            };
+        var inviteResult = await InviteService.SendInviteAsync(postInvite);
+
+        if (inviteResult.Errors.Count != 0)
+        {
+            if (inviteResult.Errors.Contains("Invite already exists."))
+            {
+                Logger.LogWarning($"Invite already exists for {receiverGuid}");
+                ToastService.ShowWarning("Invite already exists.");
+            }
+            else
+            {
+                Logger.LogWarning("Error when sending invite: " + string.Join(", ", inviteResult.Errors));
+            }
+        }
+        else
+        {
+            Logger.LogInformation($"Invite sent to {receiverGuid}.");
+            ToastService.ShowSuccess("Invite sent!");
+
+        }
+    }
+
+    private async Task RemoveFromGroup(Guid receiverGuid)
+    {
+        var removeFromGroupResult = await GroupService.RemoveFromGroupAsync(_groupIdAsInt, receiverGuid);
+
+        if (removeFromGroupResult.Errors.Count != 0)
+        {
+            Logger.LogWarning("Error when removing from group: " + string.Join(", ", removeFromGroupResult.Errors));
+        }
+        else
+        {
+            Logger.LogInformation($"Removed {receiverGuid} from group {_allGroupMemberships.GroupId}.");
+            ToastService.ShowSuccess("Removed successfully!");
+            _allMemberProfiles.RemoveAll(p => p.Profile.ProfileGuid == receiverGuid);
+        }
+        // If user leaving the group
+        if (receiverGuid == _loggedInProfileGuid)
+        {
+            _myGroupMembership.Members.Clear();
+        }
+        StateHasChanged();
+    }
+
+    private async Task ChangeMemberType(Guid profileGuid, string memberType)
+    {
+        var changeMemberTypeResponse = await GroupService.ChangeMemberTypeAsync(_groupIdAsInt, profileGuid, memberType);
+
+        if (changeMemberTypeResponse.Errors.Count != 0)
+        {
+            ToastService.ShowError("Failed to change member status.");
+            Logger.LogError("Error when changing member status: " + string.Join(", ", changeMemberTypeResponse.Errors));
+        }
+        else
+        {
+            Logger.LogInformation($"Changed {profileGuid} to {memberType}.");
+            ToastService.ShowSuccess("Member status changed successfully!");
+            var profileWithMemberType = _allMemberProfiles.FirstOrDefault(p => p.Profile.ProfileGuid == profileGuid);
+            if (profileWithMemberType != null)
+            {
+                profileWithMemberType.MemberType = memberType;
+            }
+        }
+        StateHasChanged();
+    }
+    private async Task DeleteGroup()
+    {
+        var deleteGroupResult = await GroupService.DeleteGroupAsync(_groupIdAsInt);
+        if (deleteGroupResult.Errors.Count != 0)
+        {
+            Logger.LogError("Error when deleting group: " + string.Join(", ", deleteGroupResult.Errors));
+            ToastService.ShowError("Failed to delete group.");
+        }
+        else
+        {
+            ToastService.ShowSuccess("Group has been deleted. Redirecting to groups page..");
+            await Task.Delay(3000);
+            NavigationManager.NavigateTo("my-groups");
+        }
+    }
+    private async Task SaveGroup()
+    {
+        _editGroup.GroupId = _groupIdAsInt;
+        var editGroupResult = await GroupService.EditGroupAsync(_editGroup);
+        if (editGroupResult.Errors.Count != 0)
+        {
+            Logger.LogError("Error when editing group: " + string.Join(", ", editGroupResult.Errors));
+            ToastService.ShowError("Failed to save your changes.");
+        }
+        else
+        {
+            Logger.LogInformation($"Edits to group {_groupIdAsInt} were saved successfully.");
+            ToastService.ShowSuccess("Your changes have been saved.");
+            _group = editGroupResult.Value;
+        }
+        ToggleEditMode();
+        StateHasChanged();
+    }
+}
+

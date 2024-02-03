@@ -1,0 +1,36 @@
+﻿body {
+}
+
+
+.header {
+    height: 10vh;
+}
+
+h1 {
+    color: #2b3e2a;
+}
+
+h1, h2, .profile-picture {
+   
+    text-align:center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+}
+
+.profile-picture {
+    border-radius: 50rem;
+    max-height: 25rem;
+    max-width: 25rem;
+    display: flex;
+    margin: 4rem auto 0 auto ;
+}
+
+.set_logo_center {
+    display: flex;
+    justify-content: center;
+}
+
